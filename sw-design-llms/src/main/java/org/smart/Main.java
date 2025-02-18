@@ -1,9 +1,13 @@
 package org.smart;
 import org.smart.processors.*;
 import spoon.Launcher;
+import spoon.SpoonAPI;
+import spoon.processing.ProcessingManager;
+import spoon.reflect.CtModel;
 import spoon.reflect.declaration.CtClass;
 import spoon.reflect.declaration.CtType;
 import spoon.reflect.factory.Factory;
+import spoon.support.QueueProcessingManager;
 import spoon.support.compiler.FileSystemFolder;
 
 import java.io.File;
@@ -32,43 +36,45 @@ public class Main {
 
         // Initialize Spoon launcher
         Launcher launcher = new Launcher();
-        launcher.addInputResource(new FileSystemFolder(repoDir));
-        launcher.getEnvironment().setAutoImports(true); // Automatically add imports
-        launcher.getEnvironment().setCommentEnabled(true); // Preserve comments
+        launcher.addInputResource(new FileSystemFolder(repositoryPath));
+        launcher.getEnvironment().setAutoImports(true);
+        launcher.getEnvironment().setCommentEnabled(true);
+        launcher.run();
         Factory factory = launcher.getFactory();
+        ProcessingManager processingManager = new QueueProcessingManager(factory);
 
         // Apply transformations
         for (String transformation : transformations) {
             switch (transformation.trim().toLowerCase()) {
                 case "directinstantiation":
                     System.out.println("Applying Direct Instantiation transformation...");
-                    launcher.addProcessor(new DirectInstantiationProcessor());
+                    processingManager.addProcessor(new DirectInstantiationProcessor());
                     break;
                 case "disableabstraction":
                     System.out.println("Applying Disable Abstraction transformation...");
-                    launcher.addProcessor(new DisableAbstractionProcessor());
+                    processingManager.addProcessor(new DisableAbstractionProcessor());
                     break;
                 case "godclass":
                     System.out.println("Applying God Class transformation...");
-                    launcher.addProcessor(new GodClassProcessor());
+                    processingManager.addProcessor(new GodClassProcessor());
                     break;
                 case "featureenvy":
                     System.out.println("Applying Feature Envy transformation...");
-                    launcher.addProcessor(new FeatureEnvyProcessor());
+                    processingManager.addProcessor(new FeatureEnvyProcessor());
                     break;
                 default:
                     System.err.println("Error: Unknown transformation '" + transformation + "'.");
                     System.exit(1);
             }
         }
-
-        // Run Spoon to process the code
-        launcher.run();
+        // Execute all processes
+        processingManager.process(factory.Class().getAll());
 
         // Output transformed code to a new directory
         String outputDir = repositoryPath + "-transformed";
-        System.out.println("Writing transformed code to: " + outputDir);
         launcher.setSourceOutputDirectory(outputDir);
+        launcher.prettyprint();
+        System.out.println("Writing transformed code to: " + outputDir);
 
         // Print summary
         System.out.println("Transformations applied successfully.");
