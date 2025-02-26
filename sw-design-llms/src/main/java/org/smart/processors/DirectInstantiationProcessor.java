@@ -1,390 +1,264 @@
 package org.smart.processors;
 
 import spoon.processing.AbstractProcessor;
-import spoon.reflect.code.CtAssignment;
-import spoon.reflect.code.CtFieldAccess;
-import spoon.reflect.code.CtStatement;
-import spoon.reflect.code.CtVariableAccess;
+import spoon.reflect.code.*;
 import spoon.reflect.declaration.*;
 import spoon.reflect.factory.Factory;
 import spoon.reflect.reference.CtTypeReference;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
-public class DirectInstantiationProcessor extends AbstractProcessor<CtConstructor<?>> {
+public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
+    // Store classes that were modified
+    public static Map<String, String> modifiedClasses = new HashMap<>();
     // Java standard library packages to exclude
     private static final Set<String> JAVA_STANDARD_PACKAGES = Set.of(
-            "com.sun.jarsigner",
-            "com.sun.java.accessibility.util",
-            "com.sun.javadoc",
-            "com.sun.jdi",
-            "com.sun.jdi.connect",
-            "com.sun.jdi.connect.spi",
-            "com.sun.jdi.event",
-            "com.sun.jdi.request",
-            "com.sun.management",
-            "com.sun.net.httpserver",
-            "com.sun.net.httpserver.spi",
-            "com.sun.nio.sctp",
-            "com.sun.security.auth",
-            "com.sun.security.auth.callback",
-            "com.sun.security.auth.login",
-            "com.sun.security.auth.module",
-            "com.sun.security.jgss",
-            "com.sun.source.doctree",
-            "com.sun.source.tree",
-            "com.sun.source.util",
-            "com.sun.tools.attach",
-            "com.sun.tools.attach.spi",
-            "com.sun.tools.javac",
-            "com.sun.tools.javadoc",
-            "com.sun.tools.jconsole",
-            "java.applet",
-            "java.awt",
-            "java.awt.color",
-            "java.awt.datatransfer",
-            "java.awt.desktop",
-            "java.awt.dnd",
-            "java.awt.event",
-            "java.awt.font",
-            "java.awt.geom",
-            "java.awt.im",
-            "java.awt.im.spi",
-            "java.awt.image",
-            "java.awt.image.renderable",
-            "java.awt.print",
-            "java.beans",
-            "java.beans.beancontext",
-            "java.io",
-            "java.lang",
-            "java.lang.annotation",
-            "java.lang.instrument",
-            "java.lang.invoke",
-            "java.lang.management",
-            "java.lang.module",
-            "java.lang.ref",
-            "java.lang.reflect",
-            "java.math",
-            "java.net",
-            "java.net.http",
-            "java.net.spi",
-            "java.nio",
-            "java.nio.channels",
-            "java.nio.channels.spi",
-            "java.nio.charset",
-            "java.nio.charset.spi",
-            "java.nio.file",
-            "java.nio.file.attribute",
-            "java.nio.file.spi",
-            "java.rmi",
-            "java.rmi.activation",
-            "java.rmi.dgc",
-            "java.rmi.registry",
-            "java.rmi.server",
-            "java.security",
-            "java.security.acl",
-            "java.security.cert",
-            "java.security.interfaces",
-            "java.security.spec",
-            "java.sql",
-            "java.text",
-            "java.text.spi",
-            "java.time",
-            "java.time.chrono",
-            "java.time.format",
-            "java.time.temporal",
-            "java.time.zone",
-            "java.util",
-            "java.util.concurrent",
-            "java.util.concurrent.atomic",
-            "java.util.concurrent.locks",
-            "java.util.function",
-            "java.util.jar",
-            "java.util.logging",
-            "java.util.prefs",
-            "java.util.regex",
-            "java.util.spi",
-            "java.util.stream",
-            "java.util.zip",
-            "javax.accessibility",
-            "javax.annotation.processing",
-            "javax.crypto",
-            "javax.crypto.interfaces",
-            "javax.crypto.spec",
-            "javax.imageio",
-            "javax.imageio.event",
-            "javax.imageio.metadata",
-            "javax.imageio.plugins.bmp",
-            "javax.imageio.plugins.jpeg",
-            "javax.imageio.plugins.tiff",
-            "javax.imageio.spi",
-            "javax.imageio.stream",
-            "javax.lang.model",
-            "javax.lang.model.element",
-            "javax.lang.model.type",
-            "javax.lang.model.util",
-            "javax.management",
-            "javax.management.loading",
-            "javax.management.modelmbean",
-            "javax.management.monitor",
-            "javax.management.openmbean",
-            "javax.management.relation",
-            "javax.management.remote",
-            "javax.management.remote.rmi",
-            "javax.management.timer",
-            "javax.naming",
-            "javax.naming.directory",
-            "javax.naming.event",
-            "javax.naming.ldap",
-            "javax.naming.spi",
-            "javax.net",
-            "javax.net.ssl",
-            "javax.print",
-            "javax.print.attribute",
-            "javax.print.attribute.standard",
-            "javax.print.event",
-            "javax.rmi.ssl",
-            "javax.script",
-            "javax.security.auth",
-            "javax.security.auth.callback",
-            "javax.security.auth.kerberos",
-            "javax.security.auth.login",
-            "javax.security.auth.spi",
-            "javax.security.auth.x500",
-            "javax.security.cert",
-            "javax.security.sasl",
-            "javax.smartcardio",
-            "javax.sound.midi",
-            "javax.sound.midi.spi",
-            "javax.sound.sampled",
-            "javax.sound.sampled.spi",
-            "javax.sql",
-            "javax.sql.rowset",
-            "javax.sql.rowset.serial",
-            "javax.sql.rowset.spi",
-            "javax.swing",
-            "javax.swing.border",
-            "javax.swing.colorchooser",
-            "javax.swing.event",
-            "javax.swing.filechooser",
-            "javax.swing.plaf",
-            "javax.swing.plaf.basic",
-            "javax.swing.plaf.metal",
-            "javax.swing.plaf.multi",
-            "javax.swing.plaf.nimbus",
-            "javax.swing.plaf.synth",
-            "javax.swing.table",
-            "javax.swing.text",
-            "javax.swing.text.html",
-            "javax.swing.text.html.parser",
-            "javax.swing.text.rtf",
-            "javax.swing.tree",
-            "javax.swing.undo",
-            "javax.tools",
-            "javax.transaction.xa",
-            "javax.xml",
-            "javax.xml.catalog",
-            "javax.xml.crypto",
-            "javax.xml.crypto.dom",
-            "javax.xml.crypto.dsig",
-            "javax.xml.crypto.dsig.dom",
-            "javax.xml.crypto.dsig.keyinfo",
-            "javax.xml.crypto.dsig.spec",
-            "javax.xml.datatype",
-            "javax.xml.namespace",
-            "javax.xml.parsers",
-            "javax.xml.stream",
-            "javax.xml.stream.events",
-            "javax.xml.stream.util",
-            "javax.xml.transform",
-            "javax.xml.transform.dom",
-            "javax.xml.transform.sax",
-            "javax.xml.transform.stax",
-            "javax.xml.transform.stream",
-            "javax.xml.validation",
-            "javax.xml.xpath",
-            "jdk.dynalink",
-            "jdk.dynalink.beans",
-            "jdk.dynalink.linker",
-            "jdk.dynalink.linker.support",
-            "jdk.dynalink.support",
-            "jdk.javadoc.doclet",
-            "jdk.jfr",
-            "jdk.jfr.consumer",
-            "jdk.jshell",
-            "jdk.jshell.execution",
-            "jdk.jshell.spi",
-            "jdk.jshell.tool",
-            "jdk.management.jfr",
-            "jdk.nashorn.api.scripting",
-            "jdk.nashorn.api.tree",
-            "jdk.net",
-            "jdk.nio",
-            "jdk.security.jarsigner",
-            "netscape.javascript",
-            "org.ietf.jgss",
-            "org.w3c.dom",
-            "org.w3c.dom.bootstrap",
-            "org.w3c.dom.css",
-            "org.w3c.dom.events",
-            "org.w3c.dom.html",
-            "org.w3c.dom.ls",
-            "org.w3c.dom.ranges",
-            "org.w3c.dom.stylesheets",
-            "org.w3c.dom.traversal",
-            "org.w3c.dom.views",
-            "org.w3c.dom.xpath",
-            "org.xml.sax",
-            "org.xml.sax.ext",
-            "org.xml.sax.helpers"
+            "com.sun.",  "java.", "javafx.", "jdk.", "netscape.javascript", "org.ietf.jgss", "org.w3c", "org.xml."
     );
-    @Override
-    public void process(CtConstructor<?> constructor) {
-        if (constructor.getParameters().isEmpty()) {
-            return;
-        }
-        // Check if the constructor has parameters (dependencies)
-        if (!constructor.getParameters().isEmpty()) {
-            // Check if all parameters are user-defined types
-            boolean allUserDefined = constructor.
-                    getParameters().
-                    stream().
-                    allMatch(ctParameter -> isUserDefineType(ctParameter.getType()));
-            if (allUserDefined) {
-                /**
-                 * We analyze the constructor body by iterating over its statements.
-                 * We look for assignment statements where a field is being assigned the value of a parameter.
-                 */
-                Factory factory = constructor.getFactory();
-                // Iterate over the parameters of the constructor
-                List<CtParameter<?>> parameters = constructor.getParameters();
-                for (CtParameter<?> parameter : parameters) {
-                    // Find the field corresponding to the parameter
-                    CtField<?> field = findFieldForParameter(constructor, parameter);
-                    if (field != null) {
-                        // Account for interfaces
-                        CtTypeReference<?> parameterType = parameter.getType();
-                        if (parameterType.isInterface()) {
-                            // Select a random implementation
-                            CtType<?> implementation = returnRandomImplementation(parameterType);
-                            if (implementation != null) {
-                                CtStatement assignment = factory.createCodeSnippetStatement(
-                                        "this."+ field.getSimpleName() + " = new " + implementation.getSimpleName() + "()"
-                                );
-                                // Insert
-                                constructor.getBody().insertEnd(assignment);
-                                // Delete old statement
-                                deleteOldAssignment(constructor, field, parameter);
-                            } else {
-                                System.out.println("No implementation found for interface: "+ parameterType.getQualifiedName());
-                            }
-                        } else {
-                            // Create a direct instantiation statement for the field
-                            CtStatement assignment = factory.createCodeSnippetStatement(
-                                    "this." + field.getSimpleName() + " = new " + parameter.getType().getSimpleName() + "()"
-                            );
-                            // Insert the assignment at the end of the constructor body
-                            constructor.getBody().insertEnd(assignment);
+    // Store DI constructors and setters to remove
+    private Set<CtConstructor<?>> diConstructors = new HashSet<>();
+    private Set<CtMethod<?>> diSetters = new HashSet<>();
+    // Fields needing initializers and their concrete types
+    private Map<CtField<?>, CtTypeReference<?>> fieldsToInitialize = new HashMap<>();
+    // To avoid rechecking
+    private Map<CtTypeReference<?>, List<CtType<?>>> implementationsCache = new HashMap<>();
 
-                            // Delete the old assignment statement
-                            deleteOldAssignment(constructor, field, parameter);
-                        }
-                    }
+    @Override
+    public boolean isToBeProcessed(CtElement candidate) {
+        // Process classes, constructor calls, and invocations
+        return candidate instanceof CtClass<?>
+                || candidate instanceof CtConstructorCall<?>
+                || candidate instanceof CtInvocation<?>;
+    }
+
+    @Override
+    public void process(CtElement element) {
+        if (element instanceof CtClass<?>) {
+            processClass((CtClass<?>) element);
+        } else if (element instanceof CtConstructorCall<?>) {
+            processConstructorCall((CtConstructorCall<?>) element);
+        } else if (element instanceof CtInvocation<?>) {
+            processInvocation((CtInvocation<?>) element);
+        }
+    }
+
+    private void processClass(CtClass<?> ctClass) {
+        // Boolean to keep track of modified classes
+        boolean modified = false;
+        // Identify DI constructors
+        for (CtConstructor<?> ctor : ctClass.getConstructors()) {
+            if (isDIConstructor(ctor)) {
+                diConstructors.add(ctor);
+                modified = true;
+            }
+        }
+
+        // Identify DI setters
+        for (CtMethod<?> method : ctClass.getMethods()) {
+            if (isDISetter(method)) {
+                diSetters.add(method);
+                modified = true;
+            }
+        }
+
+        // Collect fields set by DI
+        Set<CtField<?>> diFields = new HashSet<>();
+        for (CtConstructor<?> ctor : diConstructors) {
+            diFields.addAll(getAssignedFields(ctor));
+        }
+        for (CtMethod<?> setter : diSetters) {
+            CtField<?> field = getAssignedField(setter);
+            if (field != null) {
+                diFields.add(field);
+            }
+        }
+
+        // Determine which fields need initializers
+        for (CtField<?> field : diFields) {
+            boolean initialized = false;
+            for (CtConstructor<?> ctor : ctClass.getConstructors()) {
+                if (!diConstructors.contains(ctor) && assignsToField(ctor, field)) {
+                    initialized = true;
+                    break;
                 }
-                // Clear the parameters from the constructor
-                constructor.getParameters().clear();
+            }
+            if (!initialized && field.getDefaultExpression() == null) {
+                CtTypeReference<?> concreteType = returnRandomImplementation(field.getType());
+                fieldsToInitialize.put(field, concreteType);
+                modified = true;
+            }
+        }
+        if (modified) {
+            String className = ctClass.getQualifiedName();
+            String filePath = ctClass.getPosition().getFile().getAbsolutePath();
+            modifiedClasses.put(className, filePath);
+        }
+    }
+
+    private void processConstructorCall(CtConstructorCall<?> call) {
+        CtConstructor<?> calledCtor = (CtConstructor<?>) call.getExecutable().getDeclaration();
+        if (calledCtor != null && diConstructors.contains(calledCtor)) {
+            // Replace with no-arg constructor call
+            CtConstructorCall<?> newCall = getFactory().createConstructorCall(call.getType());
+            call.replace(newCall);
+            // Store the calling class as a modified class
+            CtClass<?> parentClass = call.getParent(CtClass.class);
+            if (parentClass != null) {
+                String className = parentClass.getQualifiedName();
+                String filePath = parentClass.getPosition().getFile().getAbsolutePath(); // calledCtor.getPosition()... will also work, but just for consistency.
+                modifiedClasses.put(className, filePath);
             }
         }
     }
-    /**
-     * Checks if a type is user-defined.
-     */
-    private boolean isUserDefineType(CtTypeReference<?> typeReference) {
-        if (typeReference.isPrimitive()) {
+
+    private void processInvocation(CtInvocation<?> invocation) {
+        CtExecutable<?> executable = invocation.getExecutable().getDeclaration();
+        if (executable instanceof CtMethod<?> calledMethod && diSetters.contains(calledMethod)) {
+            // Remove the setter invocation
+            invocation.delete();
+            // Store the calling class as modified
+            CtClass<?> parentClass = invocation.getParent(CtClass.class);
+            if (parentClass != null) {
+                String className = parentClass.getQualifiedName();
+                String filePath = parentClass.getPosition().getFile().getAbsolutePath();
+                modifiedClasses.put(className, filePath);
+            }
+        }
+    }
+
+    @Override
+    public void processingDone() {
+        // Remove DI constructors and setters
+        for (CtConstructor<?> ctor : diConstructors) {
+            ctor.delete();
+        }
+        for (CtMethod<?> setter : diSetters) {
+            setter.delete();
+        }
+
+        // Add field initializers
+        for (Map.Entry<CtField<?>, CtTypeReference<?>> entry : fieldsToInitialize.entrySet()) {
+            CtField<?> field = entry.getKey();
+            CtTypeReference<?> concreteType = entry.getValue();
+            // Ensure the constructor call matches the field's type
+            CtConstructorCall<?> newInstanceCall = getFactory().createConstructorCall(concreteType);
+            // Since field is CtField<?>, we suppress unchecked warning or cast if needed
+            field.setDefaultExpression((CtExpression) newInstanceCall); // Explicit cast
+        }
+    }
+
+    // Helper Methods
+
+    private boolean isDIConstructor(CtConstructor<?> ctor) {
+        if (ctor.getParameters().isEmpty()) {
             return false;
         }
-
-        String qualifiedName = typeReference.getQualifiedName();
-        for (String javaPackage: JAVA_STANDARD_PACKAGES) {
-            if (qualifiedName.startsWith(javaPackage+".")) {
-                return false;
-            }
+        // Check if all parameters are native types; if so, skip this constructor
+        boolean allNative = ctor.getParameters().stream()
+                .map(param -> param.getType())
+                .allMatch(this::isJavaNativeType);
+        if (allNative) {
+            return false;
         }
-
-        return true;
-    }
-
-    /**
-     * Finds the field that corresponds to a constructor parameter
-     */
-    private CtField<?> findFieldForParameter(CtConstructor<?> constructor, CtParameter<?> parameter) {
-        // Get the declaring type of the constructor, i.e. the class
-        CtType<?> declaringType = constructor.getDeclaringType();
-
-        // Iterate over the statements in the constructor body
-        List<CtStatement> statements = constructor.getBody().getStatements();
-        for (CtStatement statement: statements) {
-            // Check if it's an assignment
-            if (statement instanceof CtAssignment<?,?>) {
-                CtAssignment<?,?> assignment = (CtAssignment<?,?>) statement;
-                // Check if the LHS of assignment is a field access
-                if (assignment.getAssigned() instanceof CtFieldAccess<?>) {
-                    CtFieldAccess<?> fieldAccess = (CtFieldAccess<?>) assignment.getAssigned();
-                    // Check if RHS is the parameter
-                    if (assignment.getAssignment() instanceof CtVariableAccess<?>) {
-                        CtVariableAccess<?> variableAccess = (CtVariableAccess<?>) assignment.getAssignment();
-                        // Compare the parameter name with the variable name
-                        if (variableAccess.getVariable().getSimpleName().equals(parameter.getSimpleName())) {
-                            // Find the field in class (declaring type)
-                            List<CtField<?>> fields = declaringType.getFields();
-                            for (CtField<?> field: fields) {
-                                if (field.getSimpleName().equals(fieldAccess.getVariable().getSimpleName())) {
-                                    return field;
-                                }
-                            }
+        // Collect parameter names
+        Set<String> paramNames = new HashSet<>();
+        ctor.getParameters().forEach(p -> paramNames.add(p.getSimpleName()));
+        // Track which parameters are assigned to fields
+        Set<String> assignedParams = new HashSet<>();
+        for (CtStatement stmt : ctor.getBody().getStatements()) {
+            if (stmt instanceof CtAssignment) {
+                CtAssignment<?, ?> assign = (CtAssignment<?, ?>) stmt;
+                if (assign.getAssigned() instanceof CtFieldAccess
+                        && ((CtFieldAccess<?>) assign.getAssigned()).getTarget() instanceof CtThisAccess) {
+                    CtExpression<?> assignedExpr = assign.getAssignment();
+                    if (assignedExpr instanceof CtVariableRead) {
+                        String varName = assignedExpr.toString();
+                        if (paramNames.contains(varName)) {
+                            assignedParams.add(varName);
                         }
                     }
                 }
             }
         }
-        return null;
+        // Constructor is DI if all parameters are assigned to fields
+        return assignedParams.size() == paramNames.size();
     }
 
-    /**
-     * Delete the old assignment statement for the given parameter and field.
-     */
-    private void deleteOldAssignment(CtConstructor<?> constructor, CtField<?> field, CtParameter<?> parameter) {
-        List<CtStatement> statements = constructor.getBody().getStatements();
-        for (CtStatement statement: statements) {
-            // Make sure we are in an assignment statement
-            if (statement instanceof CtAssignment<?,?>) {
-                CtAssignment<?,?> assignment = (CtAssignment<?,?>) statement;
-                // Check if LHS is a field access
-                if (assignment.getAssigned() instanceof CtFieldAccess<?>) {
-                    CtFieldAccess<?> fieldAccess = (CtFieldAccess<?>) assignment.getAssigned();
-                    // Check if RHS is the parameter
-                    if (assignment.getAssignment() instanceof CtVariableAccess<?>) {
-                        CtVariableAccess<?> variableAccess = (CtVariableAccess<?>) assignment.getAssignment();
+    // Helper method to check if a type is a Java native type
+    private boolean isJavaNativeType(CtTypeReference<?> typeRef) {
+        String packageName = typeRef.getPackage() != null ? typeRef.getPackage().getQualifiedName() : "";
+        // Check for primitive types or java.lang/java.util types commonly used as "native"
+        boolean result = typeRef.isPrimitive()
+                || JAVA_STANDARD_PACKAGES.stream().anyMatch(p -> packageName.startsWith(p));
 
-                        // Compare the parameter name and field name
-                        if ( variableAccess.getVariable().getSimpleName().equals(parameter.getSimpleName())
-                        && fieldAccess.getVariable().getSimpleName().equals(field.getSimpleName()) ) {
-                            statement.delete();
-                            break;
-                        }
+        return result;
+    }
+
+    private boolean isDISetter(CtMethod<?> method) {
+        if (!method.getSimpleName().startsWith("set") || method.getParameters().size() != 1) {
+            return false;
+        }
+        CtBlock<?> body = method.getBody();
+        if (body == null) {
+            // Abstract method or interface
+            return false;
+        }
+        List<CtStatement> statements = body.getStatements();
+        if (statements.size() != 1 || !(statements.get(0) instanceof CtAssignment)) {
+            return false;
+        }
+        CtAssignment<?, ?> assign = (CtAssignment<?, ?>) statements.get(0);
+        if (!(assign.getAssigned() instanceof CtFieldAccess)
+                || !(((CtFieldAccess<?>) assign.getAssigned()).getTarget() instanceof CtThisAccess)) {
+            return false;
+        }
+        CtExpression<?> assignedExpr = assign.getAssignment();
+        String paramName = method.getParameters().get(0).getSimpleName();
+        return assignedExpr.toString().equals(paramName);
+    }
+
+    private Set<CtField<?>> getAssignedFields(CtConstructor<?> ctor) {
+        Set<CtField<?>> fields = new HashSet<>();
+        // Get assignment statements
+        List<CtStatement> assignments =  ctor.getBody().getStatements().stream().filter(s -> s instanceof CtAssignment<?,?>).toList();
+        for (CtStatement stmt : assignments) {
+            CtAssignment<?, ?> assign = (CtAssignment<?, ?>) stmt;
+            CtFieldAccess<?> fieldAccess = (CtFieldAccess<?>) assign.getAssigned();
+            fields.add(fieldAccess.getVariable().getDeclaration());
+        }
+        return fields;
+    }
+
+    private CtField<?> getAssignedField(CtMethod<?> setter) {
+        CtStatement stmt = setter.getBody().getStatement(0);
+        CtAssignment<?, ?> assign = (CtAssignment<?, ?>) stmt;
+        CtFieldAccess<?> fieldAccess = (CtFieldAccess<?>) assign.getAssigned();
+        return fieldAccess.getVariable().getDeclaration();
+    }
+
+    private boolean assignsToField(CtConstructor<?> ctor, CtField<?> field) {
+        for (CtStatement stmt : ctor.getBody().getStatements()) {
+            if (stmt instanceof CtAssignment) {
+                CtAssignment<?, ?> assign = (CtAssignment<?, ?>) stmt;
+                if (assign.getAssigned() instanceof CtFieldAccess) {
+                    CtFieldAccess<?> fa = (CtFieldAccess<?>) assign.getAssigned();
+                    if (fa.getVariable().getDeclaration() == field) {
+                        return true;
                     }
                 }
             }
         }
+        return false;
     }
 
     /**
      * Finds all implementations of a given interface
      */
     private List<CtType<?>> findImplementations(CtTypeReference<?> interfaceReference) {
+        if (implementationsCache.containsKey(interfaceReference)) {
+            return implementationsCache.get(interfaceReference);
+        }
         List<CtType<?>> implementations = new ArrayList<>();
         Factory factory = interfaceReference.getFactory();
         // Iterate over all types in the project
@@ -401,18 +275,20 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtConstructo
                 }
             }
         }
+        // Cache the result before returning
+        implementationsCache.put(interfaceReference, implementations);
         return implementations;
     }
 
     /**
      * Randomly returns an implementation of an interface.
      */
-    private CtType<?> returnRandomImplementation(CtTypeReference<?> interfaceReference) {
+    private CtTypeReference<?> returnRandomImplementation(CtTypeReference<?> interfaceReference) {
         List<CtType<?>> implementations = findImplementations(interfaceReference);
         if (!implementations.isEmpty()) {
             Random random = new Random();
             int index = random.nextInt(implementations.size());
-            return implementations.get(index);
+            return implementations.get(index).getReference();
         }
 
         return null;
