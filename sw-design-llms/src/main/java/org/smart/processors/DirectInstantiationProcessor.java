@@ -1,17 +1,23 @@
 package org.smart.processors;
 
+import org.smart.utils.ClassDependency;
+import org.smart.utils.SpoonUtils;
 import spoon.processing.AbstractProcessor;
 import spoon.reflect.code.*;
+import spoon.reflect.cu.SourcePosition;
 import spoon.reflect.declaration.*;
 import spoon.reflect.factory.Factory;
 import spoon.reflect.reference.CtTypeReference;
+import spoon.reflect.visitor.filter.AbstractFilter;
 
+import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
     // Store classes that were modified
-    public static Map<String, String> modifiedClasses = new HashMap<>();
+    public static Map<String, String> modifiedCallers = new HashMap<>();
+    public static Map<String, String> modifiedCallees = new HashMap<>();
     // Java standard library packages to exclude
     private static final Set<String> JAVA_STANDARD_PACKAGES = Set.of(
             "com.sun.",  "java.", "javafx.", "jdk.", "netscape.javascript", "org.ietf.jgss", "org.w3c", "org.xml."
@@ -22,14 +28,23 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
     // Fields needing initializers and their concrete types
     private Map<CtField<?>, CtTypeReference<?>> fieldsToInitialize = new HashMap<>();
     // To avoid rechecking
-    private Map<CtTypeReference<?>, List<CtType<?>>> implementationsCache = new HashMap<>();
+    public static Map<CtTypeReference<?>, List<CtClass<?>>> implementationsCache = new HashMap<>();
+    public static Map<String,ClassDependency> classDependencies = new HashMap<>();
 
     @Override
     public boolean isToBeProcessed(CtElement candidate) {
         // Process classes, constructor calls, and invocations
-        return candidate instanceof CtClass<?>
+        boolean validTypes = candidate instanceof CtClass<?>
                 || candidate instanceof CtConstructorCall<?>
                 || candidate instanceof CtInvocation<?>;
+        // Check that they are not test class
+        SourcePosition pos = candidate.getPosition();
+        boolean notTest = true;
+        if (pos != null && pos.getFile() != null) {
+            String filePath = pos.getFile().getAbsolutePath();
+            notTest = !filePath.contains("src" + File.separator + "test" + File.separator + "java");
+        }
+        return validTypes && notTest;
     }
 
     @Override
@@ -44,13 +59,10 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
     }
 
     private void processClass(CtClass<?> ctClass) {
-        // Boolean to keep track of modified classes
-        boolean modified = false;
         // Identify DI constructors
         for (CtConstructor<?> ctor : ctClass.getConstructors()) {
             if (isDIConstructor(ctor)) {
                 diConstructors.add(ctor);
-                modified = true;
             }
         }
 
@@ -58,7 +70,6 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
         for (CtMethod<?> method : ctClass.getMethods()) {
             if (isDISetter(method)) {
                 diSetters.add(method);
-                modified = true;
             }
         }
 
@@ -86,14 +97,9 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
             if (!initialized && field.getDefaultExpression() == null) {
                 CtTypeReference<?> concreteType = returnRandomImplementation(field.getType());
                 fieldsToInitialize.put(field, concreteType);
-                modified = true;
             }
         }
-        if (modified) {
-            String className = ctClass.getQualifiedName();
-            String filePath = ctClass.getPosition().getFile().getAbsolutePath();
-            modifiedClasses.put(className, filePath);
-        }
+
     }
 
     private void processConstructorCall(CtConstructorCall<?> call) {
@@ -107,7 +113,7 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
             if (parentClass != null) {
                 String className = parentClass.getQualifiedName();
                 String filePath = parentClass.getPosition().getFile().getAbsolutePath(); // calledCtor.getPosition()... will also work, but just for consistency.
-                modifiedClasses.put(className, filePath);
+                modifiedCallers.put(className, filePath);
             }
         }
     }
@@ -122,16 +128,33 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
             if (parentClass != null) {
                 String className = parentClass.getQualifiedName();
                 String filePath = parentClass.getPosition().getFile().getAbsolutePath();
-                modifiedClasses.put(className, filePath);
+                modifiedCallers.put(className, filePath);
             }
         }
     }
 
     @Override
     public void processingDone() {
-        // Remove DI constructors and setters
+        // Remove DI constructors and setters.
+        // Add a no-arg constructor to the class if it does not have one.
         for (CtConstructor<?> ctor : diConstructors) {
+            CtClass<?> parentClass = ctor.getParent(CtClass.class);
+            if (parentClass != null) {
+                boolean hasNoArg = parentClass.getConstructors().stream()
+                        .anyMatch(ctr -> ctr.getParameters().isEmpty());
+                if (!hasNoArg) {
+                    CtConstructor noArgCtor = getFactory().Core().createConstructor();
+                    noArgCtor.addModifier(ModifierKind.PUBLIC);
+                    noArgCtor.setBody(getFactory().Code().createCtBlock(null));
+                    parentClass.addConstructor(noArgCtor);
+                }
+                // Add this class to the list modified callees.
+                String className = parentClass.getQualifiedName();
+                String filePath = parentClass.getPosition().getFile().getAbsolutePath();
+                modifiedCallees.put(className, filePath);
+            }
             ctor.delete();
+
         }
         for (CtMethod<?> setter : diSetters) {
             setter.delete();
@@ -141,10 +164,29 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
         for (Map.Entry<CtField<?>, CtTypeReference<?>> entry : fieldsToInitialize.entrySet()) {
             CtField<?> field = entry.getKey();
             CtTypeReference<?> concreteType = entry.getValue();
-            // Ensure the constructor call matches the field's type
-            CtConstructorCall<?> newInstanceCall = getFactory().createConstructorCall(concreteType);
-            // Since field is CtField<?>, we suppress unchecked warning or cast if needed
-            field.setDefaultExpression((CtExpression) newInstanceCall); // Explicit cast
+            if (concreteType != null) {
+                // Ensure the constructor call matches the field's type
+                CtConstructorCall newInstanceCall = getFactory().Code().createConstructorCall(concreteType);
+                // Since field is CtField<?>, we suppress unchecked warning or cast if needed
+                field.setDefaultExpression(newInstanceCall);
+                // Track the class and its dependencies
+                // Get the fields type
+                CtType<?> declaringType = field.getDeclaringType();
+                String className = declaringType.getQualifiedName();
+                String classFilePath = SpoonUtils.getOutputRelativePath(declaringType);
+
+                // Get the dependency detail
+                CtType<?> dependencyType = concreteType.getTypeDeclaration();
+                String dependencyClassName = SpoonUtils.isJavaNativeType(concreteType) ? "EXTERNAL":SpoonUtils.getOutputRelativePath(dependencyType);
+
+                String dependencyFilePath = SpoonUtils.getOutputRelativePath(dependencyType);
+                // Record the dependency relation
+                ClassDependency dependencyInfo = classDependencies.computeIfAbsent(
+                        className,
+                        k -> new ClassDependency(classFilePath)
+                );
+                dependencyInfo.addDependency(dependencyClassName, dependencyFilePath);
+            }
         }
     }
 
@@ -157,8 +199,15 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
         // Check if all parameters are native types; if so, skip this constructor
         boolean allNative = ctor.getParameters().stream()
                 .map(param -> param.getType())
-                .allMatch(this::isJavaNativeType);
+                .allMatch(SpoonUtils::isJavaNativeType);
         if (allNative) {
+            return false;
+        }
+        // Check if all parameters are interfaces or abstracts
+        boolean allInterfacesOrAbstract = ctor.getParameters().stream()
+                .map(ctParameter -> ctParameter.getType())
+                .allMatch(this::isInterfaceOrAbstract);
+        if (!allInterfacesOrAbstract) {
             return false;
         }
         // Collect parameter names
@@ -185,18 +234,32 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
         return assignedParams.size() == paramNames.size();
     }
 
-    // Helper method to check if a type is a Java native type
-    private boolean isJavaNativeType(CtTypeReference<?> typeRef) {
-        String packageName = typeRef.getPackage() != null ? typeRef.getPackage().getQualifiedName() : "";
-        // Check for primitive types or java.lang/java.util types commonly used as "native"
-        boolean result = typeRef.isPrimitive()
-                || JAVA_STANDARD_PACKAGES.stream().anyMatch(p -> packageName.startsWith(p));
-
-        return result;
+    // Helper method to check if all types of the parameters of a method are not concrete classes
+    private boolean isInterfaceOrAbstract(CtTypeReference<?> typeRef) {
+        // Resolve type declaration (needs proper classpath setup)
+        CtType<?> typeDecl = typeRef.getTypeDeclaration();
+        if (typeDecl == null) {
+            return false;  // Unresolved type
+        }
+        if (typeDecl.isInterface()) {
+            return true;
+        }
+        // Check for abstract class
+        if (typeDecl instanceof CtClass) {
+            return ((CtClass<?>) typeDecl).isAbstract();
+        }
+        return false;
     }
 
     private boolean isDISetter(CtMethod<?> method) {
         if (!method.getSimpleName().startsWith("set") || method.getParameters().size() != 1) {
+            return false;
+        }
+        // Check if all parameters are native types; if so, skip this setter method
+        boolean allNative = method.getParameters().stream()
+                .map(param -> param.getType())
+                .allMatch(SpoonUtils::isJavaNativeType);
+        if (allNative) {
             return false;
         }
         CtBlock<?> body = method.getBody();
@@ -255,26 +318,21 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
     /**
      * Finds all implementations of a given interface
      */
-    private List<CtType<?>> findImplementations(CtTypeReference<?> interfaceReference) {
+    private List<CtClass<?>> findImplementations(CtTypeReference<?> interfaceReference) {
         if (implementationsCache.containsKey(interfaceReference)) {
             return implementationsCache.get(interfaceReference);
         }
-        List<CtType<?>> implementations = new ArrayList<>();
-        Factory factory = interfaceReference.getFactory();
-        // Iterate over all types in the project
-        List<CtType<?>> allTypes = factory.Type().getAll();
-        for (CtType<?> type: allTypes) {
-            // Check if the type is a concrete class, i.e. not an interface nor an abstract class.
-            if (type.isClass() && !type.isAbstract()) {
-                // Check if it's an implementation of interfaceReference
-                if (
-                        type.getSuperInterfaces().stream()
-                                .anyMatch(superInterface -> superInterface.equals(interfaceReference))
-                ) {
-                    implementations.add(type);
-                }
-            }
-        }
+        List<CtClass<?>> implementations = interfaceReference.getFactory()
+                .getModel()
+                .filterChildren(new AbstractFilter<CtClass<?>>(CtClass.class) {
+                    @Override
+                    public boolean matches(CtClass<?> candidate) {
+                        // Check if concrete (not abstract) and is subtype
+                        return !candidate.isAbstract() &&
+                                candidate.getReference().isSubtypeOf(interfaceReference);
+                    }
+                })
+                .list();
         // Cache the result before returning
         implementationsCache.put(interfaceReference, implementations);
         return implementations;
@@ -284,7 +342,7 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
      * Randomly returns an implementation of an interface.
      */
     private CtTypeReference<?> returnRandomImplementation(CtTypeReference<?> interfaceReference) {
-        List<CtType<?>> implementations = findImplementations(interfaceReference);
+        List<CtClass<?>> implementations = findImplementations(interfaceReference);
         if (!implementations.isEmpty()) {
             Random random = new Random();
             int index = random.nextInt(implementations.size());
