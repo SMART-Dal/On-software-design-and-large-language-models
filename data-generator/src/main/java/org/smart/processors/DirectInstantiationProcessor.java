@@ -262,6 +262,13 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
         if (allNative) {
             return false;
         }
+        // Check if all parameters are either interfaces or abstracts
+        boolean allInterfacesOrAbstract = method.getParameters().stream()
+                .map(methpdParameter -> methpdParameter.getType())
+                .allMatch(this::isInterfaceOrAbstract);
+        if (!allInterfacesOrAbstract) {
+            return false;
+        }
         CtBlock<?> body = method.getBody();
         if (body == null) {
             // Abstract method or interface
