@@ -95,7 +95,7 @@ public class Main {
         String dependenciesOutputPath = repositoryPath+"_dependencies.json";
         System.out.println("Saving dependencies mapping to: " + dependenciesOutputPath);
         try {
-            JSONWriter.writeToJSON(dependenciesOutputPath, DirectInstantiationProcessor.classDependencies);
+            JSONWriter.writeToJSON(dependenciesOutputPath, DirectInstantiationProcessor.modifiedClasses);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

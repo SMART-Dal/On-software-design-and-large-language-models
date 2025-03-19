@@ -1,17 +1,19 @@
 package org.smart.utils;
 
+import org.apache.commons.lang3.tuple.Pair;
+import spoon.reflect.code.CtConstructorCall;
 import spoon.reflect.cu.SourcePosition;
 import spoon.reflect.declaration.*;
 import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.visitor.filter.TypeFilter;
 
 import java.io.File;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class SpoonUtils {
     private static final Set<String> JAVA_STANDARD_PACKAGES = Set.of(
-            "com.sun.",  "java.", "javafx.", "jdk.", "netscape.javascript", "org.ietf.jgss", "org.w3c", "org.xml."
+            "com.sun.", "javax.",  "java.", "javafx.", "jdk.", "netscape.javascript", "org.ietf.jgss", "org.w3c", "org.xml."
     );
 
 
@@ -54,5 +56,52 @@ public class SpoonUtils {
 
         // Return true if at least one test method is found
         return !testMethods.isEmpty();
+    }
+
+    public static List<CtTypeReference<?>> getDependencyChain(CtTypeReference<?> startType, CtTypeReference<?> targetType) {
+        Queue<Pair<CtTypeReference<?>, List<CtTypeReference<?>>>> queue = new LinkedList<>();
+        Set<CtTypeReference<?>> visited = new HashSet<>();
+
+        List<CtTypeReference<?>> initialPath = new ArrayList<>();
+        initialPath.add(startType);
+        queue.add(Pair.of(startType, initialPath));
+
+        while (!queue.isEmpty()) {
+            Pair<CtTypeReference<?>, List<CtTypeReference<?>>> current = queue.poll();
+            CtTypeReference<?> currentType = current.getLeft();
+            List<CtTypeReference<?>> currentPath = current.getRight();
+
+            if (visited.contains(currentType)) {
+                continue;
+            }
+            visited.add(currentType);
+
+            if (currentType.equals(targetType)) {
+                Collections.reverse(currentPath);
+                return currentPath;
+            }
+
+            CtType<?> currentTypeDecl = currentType.getTypeDeclaration();
+            if (currentTypeDecl == null) {
+                continue;
+            }
+
+            CtTypeReference<?> superClassRef = currentTypeDecl.getSuperclass();
+            if (superClassRef != null && !isJavaNativeType(superClassRef)) {
+                List<CtTypeReference<?>> newPath = new ArrayList<>(currentPath);
+                newPath.add(superClassRef);
+                queue.add(Pair.of(superClassRef, newPath));
+            }
+
+            for (CtTypeReference<?> interfaceRef : currentTypeDecl.getSuperInterfaces()) {
+                if (!isJavaNativeType(interfaceRef)) {
+                    List<CtTypeReference<?>> newPath = new ArrayList<>(currentPath);
+                    newPath.add(interfaceRef);
+                    queue.add(Pair.of(interfaceRef, newPath));
+                }
+            }
+        }
+
+        return Collections.emptyList();
     }
 }

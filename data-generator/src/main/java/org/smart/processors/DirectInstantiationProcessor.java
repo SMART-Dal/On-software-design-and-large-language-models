@@ -1,7 +1,6 @@
 package org.smart.processors;
 
-import org.smart.utils.ClassDependency;
-import org.smart.utils.SpoonUtils;
+import org.smart.utils.*;
 import spoon.processing.AbstractProcessor;
 import spoon.reflect.code.*;
 import spoon.reflect.cu.SourcePosition;
@@ -29,7 +28,7 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
     private Map<CtField<?>, CtTypeReference<?>> fieldsToInitialize = new HashMap<>();
     // To avoid rechecking
     public static Map<CtTypeReference<?>, List<CtClass<?>>> implementationsCache = new HashMap<>();
-    public static Map<String,ClassDependency> classDependencies = new HashMap<>();
+    public static Map<String, Set<Dependency>> modifiedClasses = new HashMap<>();
 
     @Override
     public boolean isToBeProcessed(CtElement candidate) {
@@ -177,15 +176,23 @@ public class DirectInstantiationProcessor extends AbstractProcessor<CtElement> {
 
                 // Get the dependency detail
                 CtType<?> dependencyType = concreteType.getTypeDeclaration();
-                String dependencyClassName = SpoonUtils.isJavaNativeType(concreteType) ? "EXTERNAL":SpoonUtils.getOutputRelativePath(dependencyType);
+                String dependencyClassName = SpoonUtils.isJavaNativeType(concreteType) ? "EXTERNAL": dependencyType.getQualifiedName();
 
                 String dependencyFilePath = SpoonUtils.getOutputRelativePath(dependencyType);
                 // Record the dependency relation
-                ClassDependency dependencyInfo = classDependencies.computeIfAbsent(
-                        className,
-                        k -> new ClassDependency(classFilePath)
-                );
-                dependencyInfo.addDependency(dependencyClassName, dependencyFilePath);
+                CtTypeReference<?> parent = SetUtils.getKeyByValue(implementationsCache, dependencyType);
+                List<CtTypeReference<?>> dependencyChain = SpoonUtils.getDependencyChain(concreteType, parent);
+                // Filter classes that do not have a package
+                List<ClassInformation> transformedDependencyChain = dependencyChain.stream()
+                        .map(ct -> new ClassInformation(ct.getSimpleName(), ct.getPackage() != null ? ct.getPackage().getQualifiedName() : "pkg" , SpoonUtils.getOutputRelativePath(ct.getTypeDeclaration())))
+                        .collect(Collectors.toUnmodifiableList());
+                Dependency dependency = new Dependency(dependencyClassName, dependencyFilePath, transformedDependencyChain);
+                if (!modifiedClasses.containsKey(classFilePath)) {
+                    // First get the dependency's parent (interface or abstract)
+                    modifiedClasses.put(classFilePath, new HashSet<>(Arrays.asList(dependency)));
+                } else {
+                    modifiedClasses.get(classFilePath).add(dependency);
+                }
             }
         }
     }
