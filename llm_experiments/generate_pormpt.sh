@@ -1,0 +1,12 @@
+python3 -m prompt.build_prompt \
+    --project_name "jmeter-2.5.1" \
+    --perturbed_project_path "/Users/mootez/research/llms_swdesign_repos/jmeter-2.5.1-transformed" \
+    --readme_path "/Users/mootez/research/llms_swdesign_repos/jmeter-2.5.1/README" \
+    --disjoint_json "/Users/mootez/research/llms_swdesign_repos/jmeter-2.5.1_disjointPairs.json" \
+    --perturbed_json "/Users/mootez/research/llms_swdesign_repos/jmeter-2.5.1_dependencies.json" \
+    --perturbation_types "did" \
+    --noise_ratio 1 \
+    --output_prompt "./" \
+    --seed 42 \
+    --model_tag "Qwen/Qwen2.5-Coder-32B-Instruct" \
+    --n_shuffles 5
