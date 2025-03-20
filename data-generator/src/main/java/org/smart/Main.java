@@ -42,7 +42,7 @@ public class Main {
         launcher.getEnvironment().setOutputType(OutputType.COMPILATION_UNITS);
 
 
-
+        boolean didOccured = false;
         for (String transformation : transformations) {
             switch (transformation.trim().toLowerCase()) {
                 case "dependencygraph":
@@ -59,6 +59,7 @@ public class Main {
                 case "directinstantiation":
                     System.out.println("Applying Direct Instantiation transformation...");
                     launcher.addProcessor(new DirectInstantiationProcessor());
+                    didOccured = true;
                     break;
                 case "disableabstraction":
                     System.out.println("Applying Disable Abstraction transformation...");
@@ -83,21 +84,24 @@ public class Main {
         System.out.println("Transformations applied successfully.");
         System.out.println("Transformed code saved to: " + outputDir);
 
-        // Report modified classes for DirectInstantiationProcessor
-        System.out.println("The following classes have been transformed used to implement DI:");
-        for (Map.Entry<String, String> entry : DirectInstantiationProcessor.modifiedCallees.entrySet()) {
-            System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
+        if (didOccured) {
+            // Report modified classes for DirectInstantiationProcessor
+            System.out.println("The following classes have been transformed used to implement DI:");
+            for (Map.Entry<String, String> entry : DirectInstantiationProcessor.modifiedCallees.entrySet()) {
+                System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
+            }
+            System.out.println("The following classes have been transformed used to call classes that implement DI:");
+            for (Map.Entry<String, String> entry : DirectInstantiationProcessor.modifiedCallers.entrySet()) {
+                System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
+            }
+            String dependenciesOutputPath = repositoryPath+"_dependencies.json";
+            System.out.println("Saving dependencies mapping to: " + dependenciesOutputPath);
+            try {
+                JSONWriter.writeToJSON(dependenciesOutputPath, DirectInstantiationProcessor.modifiedClasses);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
-        System.out.println("The following classes have been transformed used to call classes that implement DI:");
-        for (Map.Entry<String, String> entry : DirectInstantiationProcessor.modifiedCallers.entrySet()) {
-            System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
-        }
-        String dependenciesOutputPath = repositoryPath+"_dependencies.json";
-        System.out.println("Saving dependencies mapping to: " + dependenciesOutputPath);
-        try {
-            JSONWriter.writeToJSON(dependenciesOutputPath, DirectInstantiationProcessor.modifiedClasses);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+
     }
 }
