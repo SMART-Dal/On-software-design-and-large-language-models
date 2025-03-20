@@ -8,6 +8,7 @@ import spoon.reflect.declaration.CtPackage;
 import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.visitor.filter.TypeFilter;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -99,10 +100,14 @@ public class DisjointClusterAnalyzer {
                     if (packageA == null || packageB == null) {
                         continue;
                     }
-                    ClassInformation classInformationA = new ClassInformation(nameA, classA.getPackage().getQualifiedName(), classA.getPosition().getFile().getAbsolutePath());
-                    ClassInformation classInformationB = new ClassInformation(nameB, classB.getPackage().getQualifiedName(), classB.getPosition().getFile().getAbsolutePath());
+
+                    ClassInformation classInformationA = new ClassInformation(nameA, classA.getPackage().getQualifiedName(), SpoonUtils.getOutputRelativePath(classA));
+                    ClassInformation classInformationB = new ClassInformation(nameB, classB.getPackage().getQualifiedName(), SpoonUtils.getOutputRelativePath(classB));
                     Pair<ClassInformation, ClassInformation> pair = Pair.of(classInformationA, classInformationB);
                     disjointPairs.add(pair);
+
+
+
                 }
             }
         }
