@@ -22,6 +22,8 @@ Your task is to analyze the dependencies between these classes and identify any 
 
 Please provide a list of tuples of classes that you think are tightly coupled. For example, if you think a Java class A is tightly coupled with classes B and C, you should provide the following tuple: [A, B, C].
 
+Note that you should NOT consider primitive types (e.g., int, float) as classes.
+
 ## Response Format:
 Please provide your response in the following format:
 [
@@ -29,6 +31,8 @@ Please provide your response in the following format:
     [Class4, Class5],
     ...
 ]
+
+If no classes are tightly coupled, please provide an empty list [].
 
 """
 
