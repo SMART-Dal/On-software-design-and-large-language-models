@@ -27,13 +27,13 @@ Note that you should NOT consider primitive types (e.g., int, float) as classes.
 ## Response Format:
 Please provide your response in the following format:
 [
-    [Class1, Class2, Class3],
-    [Class4, Class5],
+    [Class1, Class2],
+    [Class1, Class3],
+    [Class5, Class8]
     ...
 ]
-
+In this case, Class1 is tightly coupled with Class2 and Class3, and Class5 is tightly coupled with Class8. Note that these are arbitrary examples and may not be true for the given project.
 If no classes are tightly coupled, please provide an empty list [].
-
 """
 
 def main():
@@ -75,22 +75,19 @@ Shuffles: {args.n_shuffles}
 """)
     direct_deps_files = set()
     dependency_chain_files = set()
-    ground_truth = [] # List of tuples of tightly coupled classes: [(class1, dep1, dep2), (class2, dep3, dep4, dep5), ...]
+    ground_truth = [] # List of tuples of tightly coupled classes: [(class1, dep1), (class1, dep2), ...]
     for classname, deps in perturbed_data.items():
-        _deps = []
+        _sample = []
         perturbed_class_name = classname.split('/')[-1].split('.')[0]
-        _deps.append(perturbed_class_name)
         for dep in deps:
             full_dep_path = os.path.join(args.perturbed_project_path, dep['dependencyClassFilePath'])
             direct_deps_files.add(full_dep_path)
             dependency_class_name = dep['dependencyClassName'].split('.')[-1]
-            _deps.append(dependency_class_name)
+            _sample.append((perturbed_class_name, dependency_class_name))
             for chain_entry in dep['dependencyChain']:
                 full_dep_chain_path = os.path.join(args.perturbed_project_path, chain_entry['filePath'])
                 dependency_chain_files.add(full_dep_chain_path)
-                _deps.append(chain_entry['className'])
-        ground_truth.append(_deps)
-
+        ground_truth.append(_sample)
 
     # Collect noise candidates from disjoint pairs
     noise_candidates = set()
@@ -117,7 +114,7 @@ Shuffles: {args.n_shuffles}
         raise ValueError("Noise ratio must be between 0 and 1 (exclusive)")
     total = numerator / args.noise_ratio
     noise_count = int(total - numerator)
-    noise_count = max(noise_count, 0)
+
 
     # Select noise files
     noise_files = list(noise_candidates)[:noise_count]
