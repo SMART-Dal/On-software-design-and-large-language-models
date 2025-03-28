@@ -20,9 +20,9 @@ def get_all_files(root_dir):
 def read_file_content(file):
     try:
         with open(file, 'r') as f:
-            return f.read()
+            return f.read(), True
     except IOError:
-        return "File content unavailable."
+        return "File content unavailable.", False
     
 def write_to_file(data, filename, mode='w', verbose=False):
     try:
