@@ -31,7 +31,7 @@ You are given a Java project named {project_name}. Below is the content of its R
 ## Task:
 Your task is to analyze the dependencies between these classes and identify any tightly coupled classes. Tightly coupled classes are those with strong dependencies on each other, making them difficult to modify or test independently. 
 
-Please provide a list of tuples of classes that you think are tightly coupled. For example, if you think a Java class A is tightly coupled with classes B and C, you should provide the following tuple: [A, B, C].
+Please provide a list of tuples of classes that you think are tightly coupled. For example, if you think a Java class A is tightly coupled with classes B and C, you should provide the following tuple: [ [A, B] [A, C] ].
 
 Note that you should NOT consider primitive types (e.g., int, float) as classes.
 
