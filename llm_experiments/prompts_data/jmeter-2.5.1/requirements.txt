@@ -1,0 +1,6 @@
+tree-sitter
+tree-sitter-java
+seaborn
+matplotlib
+pandas
+langchain-ollama
