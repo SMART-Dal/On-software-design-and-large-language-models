@@ -1,73 +1,100 @@
 from collections  import defaultdict
+from sklearn.metrics import precision_score, recall_score, f1_score
 
-def group_by_class(pairs):
-    """
-    Group dependencies by their source class
-    """
-    grouped = defaultdict(set)
-    for _class, dep in pairs:
-        grouped[_class].add(dep)
+class BinaryPromptEval:
+    def __init__(self, ground_truth, answers) -> None:
+        """
+        Args:
+            ground_truth: List of dictionaries following the format: {"pair": [classX, classY], "coupled": True/False}
+            answers: List of dictionaries following the format: {"pair": [classX, classY], "coupled": True/False} returned by the LLM.
+        """
+        # Normalize the pairs by sorting the classes in each pair
+        # MS: using set() would have also worked, but it would have been less readable.
+        self.ground_truth = [
+            {"pair": sorted(pair["pair"]), "coupled": pair["coupled"]} for pair in ground_truth
+        ]
+        self.answers = [
+            {"pair": sorted(pair["pair"]), "coupled": pair["coupled"]} for pair in answers
+        ]
+        # Normalize by sorting by the list of pairs
+        self.ground_truth.sort(key=lambda x: x["pair"])
+        self.answers.sort(key=lambda x: x["pair"])
+        # Convert into numerical binary values to calculate metrics
+        self.ground_truth_numerical = [int(pair["coupled"]) for pair in self.ground_truth]
+        self.answers_numerical = [int(pair["coupled"]) for pair in self.answers]
+        # Sanity check and verify that all pairs are the same
+        assert len(self.ground_truth) == len(self.answers), "Ground truth and answers must have the same length"
+        assert all(pair1["pair"] == pair2["pair"] for pair1, pair2 in zip(self.ground_truth, self.answers)), "Ground truth and answers must have the same pairs"
 
-    return grouped 
+    def calculate_metrics(self):
+        """
+        Calculate precision, recall and f1-score
+        """
+        # Calculate precision, recall and f1-score
+        precision = precision_score(self.ground_truth_numerical, self.answers_numerical)
+        recall = recall_score(self.ground_truth_numerical, self.answers_numerical)
+        f1 = f1_score(self.ground_truth_numerical, self.answers_numerical)
 
-def calculate_metrics(ground_truth, predicted):
-    """
-    Calculate micro and macro precision, recall and f1-score
+        return {
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        }
     
-    Args:
-        ground_truth: List of tuples of tightly coupled classes [(class1, dep1), (class1, dep2), ...].
-        retrieved: List of tuples [(class1, dep1), (class1, dep2), ...] returned by the model.
+    def reset(self):
+        """
+        Reset the evaluation metrics
+        """
+        self.ground_truth = []
+        self.answers = []
+        self.ground_truth_numerical = []
+        self.answers_numerical = []
+
+class RetrievalPromptEval:
     """
-    # Get grouped dependencies for ground truth and predicted
-    gt_grouped = group_by_class(ground_truth)
-    returned_grouped = group_by_class(predicted)
+    Class used to calculate F1, precision and recall for the retrieval-based task.
+    """
+    def __init__(self, ground_truth, answers) -> None:
+        """
+        Args:
+            ground_truth: List of tuples of tightly coupled classes [(class1, dep1), (class1, dep2), ...].
+            answers: List of tuples [(class1, dep1), (class1, dep2), ...] returned by the model.
+        """
+        # Normalize the pairs by sorting the classes in each pair. This is what frozenset does as a by product.
+        # forzenset([foo, bar]) == forzenset([bar, foo]) is True. We use frozenset instead of set to make it hashable.
+        self.ground_truth = {
+            frozenset(pair) for pair in ground_truth
+        }
+        self.answers = {
+            frozenset(pair) for pair in answers
+        }
 
-    micro_tp, micro_fp, micro_fn = 0, 0, 0
-    macro_precisions = []
-    macro_recalls = []
-    macro_f1s = []
+    def calculate_metrics(self):
+        """
+        Calculate precision, recall and f1-score
+        """
+        tp = self.ground_truth.intersection(self.answers)
+        fp = self.answers - self.ground_truth
+        fn = self.ground_truth - self.answers
 
-    # Caculate metrics per class
+        tp_count = len(tp)
+        fp_count = len(fp)
+        fn_count = len(fn)
 
-    for class_x in gt_grouped:
-        true_deps = gt_grouped[class_x]
-        retrieved_deps = returned_grouped.get(class_x, set())
-
-        tp = len(true_deps & retrieved_deps)
-        fp = len(retrieved_deps - true_deps)
-        fn = len(true_deps - retrieved_deps)
-
-        micro_tp += tp
-        micro_fp += fp
-        micro_fn += fn
-
-        precision = tp / (tp + fp) if tp + fp > 0 else 0
-        recall = tp / (tp + fn) if tp + fn > 0 else 0
+        precision = tp_count / (tp_count + fp_count) if (tp_count + fp_count) > 0 else 0
+        recall = tp_count / (tp_count + fn_count) if (tp_count + fn_count) > 0 else 0
         f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
 
-        macro_precisions.append(precision)
-        macro_recalls.append(recall)
-        macro_f1s.append(f1)
-
-    # Calculate micro-averaged metrics
-    micro_precision = micro_tp / (micro_tp + micro_fp) if micro_tp + micro_fp > 0 else 0
-    micro_recall = micro_tp / (micro_tp + micro_fn) if micro_tp + micro_fn > 0 else 0
-    micro_f1 = 2 * (micro_precision * micro_recall) / (micro_precision + micro_recall) if (micro_precision + micro_recall) > 0 else 0
-
-    # Calculate macro-averaged metrics
-    macro_precision = sum(macro_precisions) / len(macro_precisions) if macro_precisions else 0
-    macro_recall = sum(macro_recalls) / len(macro_recalls) if macro_recalls else 0
-    macro_f1 = sum(macro_f1s) / len(macro_f1s) if macro_f1s else 0
-
-    return {
-        "micro": {
-            "precision": micro_precision,
-            "recall": micro_recall,
-            "f1": micro_f1
-        },
-        "macro": {
-            "precision": macro_precision,
-            "recall": macro_recall,
-            "f1": macro_f1
+        return {
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
         }
-    }
+    
+    def reset(self):
+        """
+        Reset the evaluation metrics
+        """
+        self.ground_truth = set()
+        self.answers = set()
+        
