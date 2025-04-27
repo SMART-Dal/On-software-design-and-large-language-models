@@ -1,29 +1,30 @@
 RETRIEVAL_BASED_COUPLING = """
-You are given a Java project named {project_name}. Below is the content of its README file to provide context about its purpose:
+You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. Below is the content of its README file to provide context about its purpose:
 
 ## README:
 {project_readme}
 
-## Classes:
-{list_of_classes}
-
 ## Task:
 Your task is to analyze the dependencies between these classes and identify any tightly coupled classes. Tightly coupled classes are those with strong dependencies on each other, making them difficult to modify or test independently. 
 
-Please provide a list of tuples of classes that you think are tightly coupled. For example, if you think a Java class A is tightly coupled with classes B and C, you should provide the following tuple: [ [A, B] [A, C] ].
-
+Please provide the list of pairs of classes that you think are tightly coupled. For example, if you think a Java class A is tightly coupled with classes B and C, you should provide the following tuple: [ [A, B] [A, C] ].
 Note that you should NOT consider primitive types (e.g., int, float) as classes.
 
 ## Response Format:
 Please provide your response in the following format:
+```json
 [
-    [Class1, Class2],
-    [Class1, Class3],
-    [Class5, Class8]
+    ["Class1", "Class2"],
+    [Class1, "Class3"],
+    ["Class5", "Class8"]
     ...
 ]
+```
 In this case, Class1 is tightly coupled with Class2 and Class3, and Class5 is tightly coupled with Class8. Note that these are arbitrary examples and may not be true for the given project.
-If no classes are tightly coupled, please provide an empty list [].
+If no classes are tightly coupled, please provide an empty list []. You should only provide the classe's simple name, where the simple name is the class name without the package prefix (e.g., 'Class' instead of 'com.foo.bar.Class'). Do not include any additional text or explanations. Just provide the JSON response.
+
+## Classes:
+{list_of_classes}
 """
 
 BINARY_BASED_COUPLING = """
