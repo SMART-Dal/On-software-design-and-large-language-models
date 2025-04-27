@@ -12,7 +12,7 @@ from tree_sitter import Language, Parser
 from prompt.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BASED_COUPLING
 from tqdm import tqdm
 
-NOISE_RATIOS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
 
 def calculate_iqr(data):
     q75, q25 = np.percentile(data, [75 ,25])
@@ -42,6 +42,48 @@ def parser_args():
     args = parser.parse_args()
 
     return args
+
+def generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_classes):
+    # The distribution of "labels" where 0 refers to not coupled and 1 refers to coupled
+    # is determined by the same noise ratio. In other words, the dataset should be composed 
+    # of noise_ratio of 0s and (1 - noise_ratio) of 1s.
+    # First, we determine the number of loosely coupled classes that can be included in the prompt.
+    # tightly_coupeled_pairs currently holds the pairs of classes that are tightly coupled.
+    num_of_loosely_coupled_pairs = int(( noise_ratio * len(tightly_coupeled_pairs) )/ (1-noise_ratio) )
+    # If the number of the needed loosely coupled classes is less than n_noise_classes X n_noise_classes
+    # Then we can create samples from the noise_classes X tightly_coupeled_pairs space.
+    loosely_coupled_pairs_indices = list(range(len(noise_classes)))
+    # Shuffle the indices
+    random.shuffle(loosely_coupled_pairs_indices)
+    loosely_coupled_pairs = []
+    for i in range(0, len(loosely_coupled_pairs_indices), 2):
+        if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs: 
+            break
+        # Add the pair to the loosely coupled pairs
+        x, y = loosely_coupled_pairs_indices[i], loosely_coupled_pairs_indices[i+1]
+        left_class = noise_classes[x]['path'].split('/')[-1].split('.')[0]
+        right_class = noise_classes[y]['path'].split('/')[-1].split('.')[0]
+        loosely_coupled_pairs.append((left_class, right_class))
+    # Check if we reached the number of loosely coupled pairs that is needed. If
+    # not we can create ones by mixing loosely coupled pairs with tightly coupled pairs as follow
+    # [noisy_class1, perturbed_class1], [noisy_class2, perturbed_class2] ect until we reach the number of loosely coupled pairs
+    # # that is needed.
+    if len(loosely_coupled_pairs) < num_of_loosely_coupled_pairs:
+        for ns in noise_classes:
+            # Get the noisy class and the perturbed class
+            noisy_class = ns['path'].split('/')[-1].split('.')[0]
+            for p in tightly_coupeled_pairs:
+                # Check if the pair is already in the loosely coupled pairs
+                if (noisy_class, p[0]) in loosely_coupled_pairs or (p[0], noisy_class) in loosely_coupled_pairs:
+                    continue
+                # Add the pair to the loosely coupled pairs
+                loosely_coupled_pairs.append((noisy_class, p[0]))
+                if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs:
+                    break
+            if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs:
+                break
+
+    return loosely_coupled_pairs
 
 def main():
 
@@ -101,7 +143,7 @@ def main():
                 collapsed_paths[chain_entry['filePath']] = chain_content
         
     num_of_perturbed_classes = len(collapsed_paths)
-    noise_candidates = []
+    noise_candidates = {}
     for pair in tqdm(raw_disjoint_pairs, desc='Collecting noise candidates from disjoint pairs'):
         left_path = pair['left']['filePath']
         right_path = pair['right']['filePath']
@@ -113,7 +155,7 @@ def main():
             content = remove_comments_and_docstrings(content)
             token_count = len(tokenizer.encode(content).ids)
             if q25 <= token_count <= q75:
-                noise_candidates.append({'content': content, 'path': left_path, 'token_count': token_count})
+                noise_candidates[left_path] = {'content': content, 'token_count': token_count}
             else:
                 continue
         
@@ -125,9 +167,11 @@ def main():
             content = remove_comments_and_docstrings(content)
             token_count = len(tokenizer.encode(content).ids)
             if q25 <= token_count <= q75:
-                noise_candidates.append({'content': content, 'path': right_path, 'token_count': token_count})
+                noise_candidates[right_path] = {'content': content, 'token_count': token_count}
             else:
                 continue
+    # Revert the dictionary to a list
+    noise_candidates = [{'path': k, 'content': v['content'], 'token_count': v['token_count']} for k, v in noise_candidates.items()]
     # Sort noise candidates by token count in ascending order
     noise_candidates = sorted(noise_candidates, key=lambda x: x['token_count'])
     # Noise ratio: (normal classes) / total classes where total classes = normal classes + perturbed classes + perturbed classes's dependencies + dep_chain of each dependency
@@ -145,7 +189,11 @@ def main():
         
         for path, content in collapsed_paths.items():
             classes.append((path, content))
-        
+
+        if args.prompt_template == 'binary_based':
+            loosely_coupled_pairs = generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_classes)
+            all_class_pairs = loosely_coupled_pairs + tightly_coupeled_pairs
+
         # Generate a prompt for each shuffle
         for shuff in range(args.n_shuffles):
             # Shuffle the classes
@@ -166,50 +214,6 @@ def main():
                     list_of_classes=classes_str
                     )
             elif args.prompt_template == 'binary_based':
-                # The distribution of "labels" where 0 refers to not coupled and 1 refers to coupled
-                # is determined by the same noise ratio. In other words, the dataset should be composed 
-                # of noise_ratio of 0s and (1 - noise_ratio) of 1s.
-                # First, we determine the number of loosely coupled classes that can be included in the prompt.
-                # tightly_coupeled_pairs currently holds the pairs of classes that are tightly coupled.
-                num_of_loosely_coupled_pairs = int(( noise_ratio * len(tightly_coupeled_pairs) )/ (1-noise_ratio) )
-                # If the number of the needed loosely coupled classes is less than n_noise_classes X n_noise_classes
-                # Then we can create samples from the noise_classes X tightly_coupeled_pairs space.
-                loosely_coupled_pairs = []
-                for i in range(len(noise_classes) - 1):
-                    for j in range(i + 1, len(noise_classes)):
-                        if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs:
-                            break
-                        # Add the pair to the loosely coupled pairs
-                        left_class = noise_classes[i]['path'].split('/')[-1].split('.')[0]
-                        right_class = noise_classes[j]['path'].split('/')[-1].split('.')[0]
-                        # Check if both classes are the same
-                        if left_class == right_class:
-                            continue
-                        # Check if the pair is already in the tightly coupled pairs
-                        if (left_class, right_class) in tightly_coupeled_pairs or (right_class, left_class) in tightly_coupeled_pairs:
-                            continue
-                        loosely_coupled_pairs.append((left_class, right_class))
-                    
-                # Check if we reached the number of loosely coupled pairs that is needed. If
-                # not we can create ones by mixing loosely coupled pairs with tightly coupled pairs as follow
-                # [noisy_class1, perturbed_class1], [noisy_class2, perturbed_class2] ect until we reach the number of loosely coupled pairs
-                # # that is needed.
-                if len(loosely_coupled_pairs) < num_of_loosely_coupled_pairs:
-                    for ns in noise_classes:
-                        # Get the noisy class and the perturbed class
-                        noisy_class = ns['path'].split('/')[-1].split('.')[0]
-                        for p in tightly_coupeled_pairs:
-                            # Check if the pair is already in the loosely coupled pairs
-                            if (noisy_class, p[0]) in loosely_coupled_pairs or (p[0], noisy_class) in loosely_coupled_pairs:
-                                continue
-                            # Add the pair to the loosely coupled pairs
-                            loosely_coupled_pairs.append((noisy_class, p[0]))
-                            if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs:
-                                break
-                        if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs:
-                            break
-                
-                all_class_pairs = loosely_coupled_pairs + tightly_coupeled_pairs
                 # Shuffle the class pairs
                 random.shuffle(all_class_pairs)
                 prompt = BINARY_BASED_COUPLING.format(
@@ -241,19 +245,21 @@ def main():
                 # Save the class pairs to a file that represent the ground truth
                 class_pairs_file_name = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{args.prompt_template}_{noise_ratio}_ground_truth.json"
                 class_pairs_file_path = os.path.join(args.output_prompt, class_pairs_file_name)
-                save_to_json({
-                    'tightly_coupled_pairs': tightly_coupeled_pairs,
-                    'loosely_coupled_pairs': loosely_coupled_pairs,
-                }, class_pairs_file_path)
-                # Print statistics about the prompt tightly coupled classes and loosely coupled classes distribution
-                print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of loosely coupled pairs: {len(loosely_coupled_pairs)}")
+                if args.prompt_template == 'retrieval_based':
+                    ground_truth_file_name = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{args.prompt_template}_{noise_ratio}_ground_truth.json"
+                    ground_truth_file_path = os.path.join(args.output_prompt, ground_truth_file_name)
+                    save_to_json(tightly_coupeled_pairs, ground_truth_file_path)
+                
+                elif args.prompt_template == 'binary_based':
+                    print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of loosely coupled pairs: {len(loosely_coupled_pairs)}")
+                    ground_truth_tightly_coupeled_pairs = [ {"pair": p, "coupled": True} for p in tightly_coupeled_pairs]
+                    ground_truth_loosely_coupled_pairs = [ {"pair": p, "coupled": False} for p in loosely_coupled_pairs]
+                    ground_truth_results = ground_truth_loosely_coupled_pairs + ground_truth_tightly_coupeled_pairs
+                    save_to_json(ground_truth_results, class_pairs_file_path)
+
                 save_to_json(metadata, metadata_file_path)
 
-    # Save ground truth
-    if args.prompt_template == 'retrieval_based':
-        ground_truth_file_name = f"{args.project_name}_{'-'.join(args.perturbation_types)}_ground_truth.json"
-        ground_truth_file_path = os.path.join(args.output_prompt, ground_truth_file_name)
-        save_to_json(tightly_coupeled_pairs, ground_truth_file_path)
+        
 
 if __name__ == "__main__":
     main()
