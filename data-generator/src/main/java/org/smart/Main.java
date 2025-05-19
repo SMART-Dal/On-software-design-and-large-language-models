@@ -1,5 +1,6 @@
 package org.smart;
 import org.smart.processors.*;
+import org.smart.utils.Dependency;
 import org.smart.utils.DisjointClusterAnalyzer;
 import org.smart.utils.JSONWriter;
 import spoon.Launcher;
@@ -11,9 +12,7 @@ import spoon.reflect.reference.CtTypeReference;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -43,6 +42,7 @@ public class Main {
 
 
         boolean didOccured = false;
+        boolean uidOccured = false;
         for (String transformation : transformations) {
             switch (transformation.trim().toLowerCase()) {
                 case "dependencygraph":
@@ -73,6 +73,11 @@ public class Main {
                     System.out.println("Applying Feature Envy transformation...");
                     launcher.addProcessor(new FeatureEnvyProcessor());
                     break;
+                case "unusedinjecteddependency":
+                    System.out.println("Applying Unused Dependency transformation...");
+                    launcher.addProcessor(new UnusedInjectedDependencyProcessor());
+                    uidOccured = true;
+                    break;
                 default:
                     System.err.println("Error: Unknown transformation '" + transformation + "'.");
                     System.exit(1);
@@ -84,20 +89,23 @@ public class Main {
         System.out.println("Transformations applied successfully.");
         System.out.println("Transformed code saved to: " + outputDir);
 
-        if (didOccured) {
-            // Report modified classes for DirectInstantiationProcessor
+        if (didOccured || uidOccured) {
+            // Report modified classes for DirectInstantiationProcessor and UnusedInjectedDependency
+            Set<Map.Entry<String, String>> modifiedCalless = didOccured ? DirectInstantiationProcessor.modifiedCallees.entrySet() : UnusedInjectedDependencyProcessor.modifiedCallees.entrySet();
+            Set<Map.Entry<String, String>> modifiedCallers = didOccured ? DirectInstantiationProcessor.modifiedCallers.entrySet() : UnusedInjectedDependencyProcessor.modifiedCallers.entrySet();
+            Map<String, Set<Dependency>> modifiedClasses = didOccured ? DirectInstantiationProcessor.modifiedClasses : UnusedInjectedDependencyProcessor.modifiedClasses;
             System.out.println("The following classes have been transformed used to implement DI:");
-            for (Map.Entry<String, String> entry : DirectInstantiationProcessor.modifiedCallees.entrySet()) {
+            for (Map.Entry<String, String> entry : modifiedCalless) {
                 System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
             }
             System.out.println("The following classes have been transformed used to call classes that implement DI:");
-            for (Map.Entry<String, String> entry : DirectInstantiationProcessor.modifiedCallers.entrySet()) {
+            for (Map.Entry<String, String> entry : modifiedCallers) {
                 System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
             }
             String dependenciesOutputPath = repositoryPath+"_dependencies.json";
             System.out.println("Saving dependencies mapping to: " + dependenciesOutputPath);
             try {
-                JSONWriter.writeToJSON(dependenciesOutputPath, DirectInstantiationProcessor.modifiedClasses);
+                JSONWriter.writeToJSON(dependenciesOutputPath, modifiedClasses);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
