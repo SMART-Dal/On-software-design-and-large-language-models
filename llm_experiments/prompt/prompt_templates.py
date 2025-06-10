@@ -1,3 +1,41 @@
+HYBRID_PROMPT =  """
+You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. Below is the content of its README file to provide context about its purpose:
+## README:
+{project_readme}
+
+## Task:
+You will be given a list of Java classes and your task is to determine which classes they are tightly coupled with from a bigger list, if any. Tightly coupled classes are those with strong dependencies, where one or both classes rely heavily on the other, making them difficult to modify or test independently. The list of names of classes is as follows:
+
+{classes_under_analysis}
+
+At the end of the prompt, you will be provided with the body of all classes. You should analyze the code and determine which classes from the list below, are tightly coupled with those mentioned above. Note that you should NOT consider primitive types (e.g., int, float) as classes.
+
+## Response Format:
+Assuming you are given this list of class names: ["Class1", "Class2", "Class3"]
+
+And the following list of class bodies:
+- Class1
+- Class2
+- Class3
+- Class8
+- Class9
+- Class10
+
+You must provide your response in the following format:
+```json
+[
+    ["Class1", "Class8"],
+    [Class1, "Class9"],
+    ["Class2", "None"],
+    ["Class3", "Class10"]
+    ...
+]
+```
+In this scenario, Class1 is tightly coupled with classes Class8 and Class9, Class2 is not coupled with none of the classes and Class3 is tightly coupled with Class10. You should only provide a classe's simple name, where the simple name is the class name without the package prefix (e.g., 'Class' instead of 'com.foo.bar.Class'). Do not include any additional text or explanations. Just provide the JSON response.
+## Classes:
+{list_of_classes}
+"""
+
 RETRIEVAL_BASED_COUPLING = """
 You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. Below is the content of its README file to provide context about its purpose:
 
