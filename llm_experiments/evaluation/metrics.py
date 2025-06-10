@@ -62,11 +62,12 @@ class RetrievalPromptEval:
         """
         # Normalize the pairs by sorting the classes in each pair. This is what frozenset does as a by product.
         # forzenset([foo, bar]) == forzenset([bar, foo]) is True. We use frozenset instead of set to make it hashable.
+        # also lower case the classes to avoid case sensitivity issues.
         self.ground_truth = {
-            frozenset(pair) for pair in ground_truth
+            frozenset([pair[0].lower(), pair[1].lower()]) for pair in ground_truth
         }
         self.answers = {
-            frozenset(pair) for pair in answers
+            frozenset([pair[0].lower(), pair[1].lower()]) for pair in answers
         }
 
     def calculate_metrics(self):
