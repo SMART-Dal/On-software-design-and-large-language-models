@@ -5,7 +5,7 @@ import time
 import shutil
 import numpy as np
 from tokenizers import Tokenizer
-from utils.io import read_json_file, read_file_content, save_to_json, parse_yaml_config
+from utils.io import read_json_file, read_file_content, save_config_to_yaml, save_to_json, parse_yaml_config
 from utils.paths import get_absolute_file_paths
 from utils.preprocessing import remove_comments_and_docstrings
 from utils.tree_sitter_utils import remove_class_bodies
@@ -220,12 +220,14 @@ def main():
             readme_content, _ = read_file_content(args.readme_path)
             # prompt = prompt_template(args.project_name, readme_content, classes_str)
             if args.prompt_template == 'retrieval_based':
+                prompt_template = RETRIEVAL_BASED_COUPLING
                 prompt = RETRIEVAL_BASED_COUPLING.format(
                     project_name=args.project_name, 
                     project_readme=readme_content, 
                     list_of_classes=classes_str
                     )
             elif args.prompt_template == 'binary_based':
+                prompt_template = BINARY_BASED_COUPLING
                 # Shuffle the class pairs
                 random.shuffle(all_class_pairs)
                 prompt = BINARY_BASED_COUPLING.format(
@@ -235,6 +237,7 @@ def main():
                         list_of_classes=classes_str
                     )
             elif args.prompt_template == 'hybrid':
+                prompt_template = HYBRID_PROMPT
                 # Get the first element of each class pair of tightly_coupled_pairs
                 classes_under_analysis = set(pair[0] for pair in tightly_coupeled_pairs)
                 classes_under_analysis = list(classes_under_analysis)
@@ -292,11 +295,13 @@ def main():
                     save_to_json(ground_truth_results, class_pairs_file_path)
 
                 save_to_json(metadata, metadata_file_path)
-
+    # Include the content of the prompt template in the config file
+    args.template = prompt_template
     # Copy the config file to the output directory for reproducibility
     config_file_name = os.path.basename(arguments.config_file)
     config_file_path = os.path.join(output_dir, config_file_name)
-    shutil.copy(arguments.config_file, config_file_path)
+    # Save to YML at prompt directory
+    save_config_to_yaml(args, config_file_path)
 
 
         
