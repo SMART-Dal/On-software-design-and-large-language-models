@@ -1,15 +1,17 @@
 import argparse
 import os
 import random
+import time
+import shutil
 import numpy as np
 from tokenizers import Tokenizer
-from utils.io import read_json_file, read_file_content, save_to_json
+from utils.io import read_json_file, read_file_content, save_to_json, parse_yaml_config
 from utils.paths import get_absolute_file_paths
 from utils.preprocessing import remove_comments_and_docstrings
 from utils.tree_sitter_utils import remove_class_bodies
 import tree_sitter_java as tsjava
 from tree_sitter import Language, Parser
-from prompt.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BASED_COUPLING
+from prompt.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BASED_COUPLING, HYBRID_PROMPT
 from tqdm import tqdm
 
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
@@ -28,17 +30,7 @@ def clean_depedency(content, parser):
 
 def parser_args():
     parser = argparse.ArgumentParser(description='Generate a prompt for LLM with project context, perturbed classes, dependencies, and noise.')
-    parser.add_argument('--project_name', required=True, help='Name of the Java project')
-    parser.add_argument('--perturbed_project_path', required=True, help='Path to the perturbed classes')
-    parser.add_argument('--readme_path', required=True, help='Path to the README file of the project')
-    parser.add_argument('--disjoint_json', required=True, help='Path to JSON file containing disjoint class pairs')
-    parser.add_argument('--perturbed_json', required=True, help='Path to JSON file containing perturbed classes and their dependencies')
-    parser.add_argument('--output_prompt', required=True, help='Path to output the generated prompt files')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
-    parser.add_argument('--model_tag', required=True, help='Huggingface model tag for the LLM')
-    parser.add_argument('--n_shuffles', type=int, default=1, help='Number of shuffles, i.e., different prompts to generate')
-    parser.add_argument('--prompt_template', choices=['retrieval_based', 'binary_based'], default='retrieval_based', help='Prompt template to use')
-    parser.add_argument('--perturbation_types', nargs='+', default=['did', 'dal', 'gc', 'feii'], help='Types of perturbations that were applied to the classes')
+    parser.add_argument('--config_file', type=str, required=True, help='Path to the config file.')
     args = parser.parse_args()
 
     return args
@@ -87,7 +79,14 @@ def generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_cl
 
 def main():
 
-    args = parser_args()
+
+    arguments = parser_args()
+    args = parse_yaml_config(arguments.config_file)
+    epoch_time = int(time.time())
+    output_dir = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{args.prompt_template}_{epoch_time}"
+    output_dir = os.path.join(args.output_dir, output_dir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     
     # Setup tree-sitter parser
     JAVA_LANGUAGE = Language(tsjava.language())
@@ -97,6 +96,11 @@ def main():
 
     raw_perturbed_data = read_json_file(args.perturbed_json)
     raw_disjoint_pairs = read_json_file(args.disjoint_json)
+
+    # Print the experiment configuration using for loop
+    print(f"Experiment configuration:")
+    for key, value in vars(args).items():
+        print(f"{key}: {value}")
 
     # Set the IQR range based on the token length of the perturbed classes. This range will be used to select noisy classes as well.
     perturbed_data = {}
@@ -155,7 +159,11 @@ def main():
             content = remove_comments_and_docstrings(content)
             token_count = len(tokenizer.encode(content).ids)
             if q25 <= token_count <= q75:
-                noise_candidates[left_path] = {'content': content, 'token_count': token_count}
+                lefClassName = pair['left']['className'].split('.')[-1]
+                # Check if the dollar sign is in the class name, if so, it means it is an inner class
+                if '$' in lefClassName:
+                    lefClassName = lefClassName.split('$')[-1]
+                noise_candidates[left_path] = {'content': content, 'className': lefClassName , 'token_count': token_count}
             else:
                 continue
         
@@ -167,11 +175,15 @@ def main():
             content = remove_comments_and_docstrings(content)
             token_count = len(tokenizer.encode(content).ids)
             if q25 <= token_count <= q75:
-                noise_candidates[right_path] = {'content': content, 'token_count': token_count}
+                rightClassName = pair['right']['className'].split('.')[-1]
+                # Check if the dollar sign is in the class name, if so, it means it is an inner class
+                if '$' in rightClassName:
+                    rightClassName = rightClassName.split('$')[-1]
+                noise_candidates[right_path] = {'content': content, 'className': rightClassName , 'token_count': token_count}
             else:
                 continue
     # Revert the dictionary to a list
-    noise_candidates = [{'path': k, 'content': v['content'], 'token_count': v['token_count']} for k, v in noise_candidates.items()]
+    noise_candidates = [{'path': k, 'content': v['content'], 'className': v['className'], 'token_count': v['token_count']} for k, v in noise_candidates.items()]
     # Sort noise candidates by token count in ascending order
     noise_candidates = sorted(noise_candidates, key=lambda x: x['token_count'])
     # Noise ratio: (normal classes) / total classes where total classes = normal classes + perturbed classes + perturbed classes's dependencies + dep_chain of each dependency
@@ -222,11 +234,29 @@ def main():
                         class_pair=all_class_pairs,
                         list_of_classes=classes_str
                     )
+            elif args.prompt_template == 'hybrid':
+                # Get the first element of each class pair of tightly_coupled_pairs
+                classes_under_analysis = set(pair[0] for pair in tightly_coupeled_pairs)
+                classes_under_analysis = list(classes_under_analysis)
+                # Get the noisy classes
+                _noisy_classes = set(n_class['className'] for n_class in noise_classes)
+                # Add the noisy classes to the classes under analysis
+                classes_under_analysis.extend(_noisy_classes)
+                # Shuffle the classes
+                random.shuffle(classes_under_analysis)
+                # Generate the prompt
+                prompt = HYBRID_PROMPT.format(
+                    project_name=args.project_name,
+                    project_readme=readme_content,
+                    classes_under_analysis=classes_under_analysis,
+                    list_of_classes=classes_str
+                )
+
             len_prompt = len(tokenizer.encode(prompt).ids)
             # Future idea: Randomly remove the body of classes in the prompt to make it more challenging
             print(f"Number of involved classes: {len(classes)}, Prompt token count: {len_prompt}, R={noise_ratio}, S={shuff}")
-            prompt_file_name = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{noise_ratio}_{args.prompt_template}_{shuff}.txt"
-            prompt_file_path = os.path.join(args.output_prompt, prompt_file_name)
+            prompt_file_name = f"prompt_R_{noise_ratio}_S_{shuff}.txt"
+            prompt_file_path = os.path.join(output_dir, prompt_file_name)
             with open(prompt_file_path, 'w') as f:
                 f.write(prompt)
             # Save metadata during last shuffle
@@ -240,15 +270,19 @@ def main():
                     'model_tag': args.model_tag,
                     'classes': [c[0] for c in classes],
                 }
-                metadata_file_name = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{noise_ratio}_metadata.json"
-                metadata_file_path = os.path.join(args.output_prompt, metadata_file_name)
+                metadata_file_name = f"prompt_R_{noise_ratio}_metadata.json"
+                metadata_file_path = os.path.join(output_dir, metadata_file_name)
                 # Save the class pairs to a file that represent the ground truth
-                class_pairs_file_name = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{args.prompt_template}_{noise_ratio}_ground_truth.json"
-                class_pairs_file_path = os.path.join(args.output_prompt, class_pairs_file_name)
-                if args.prompt_template == 'retrieval_based':
-                    ground_truth_file_name = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{args.prompt_template}_{noise_ratio}_ground_truth.json"
-                    ground_truth_file_path = os.path.join(args.output_prompt, ground_truth_file_name)
-                    save_to_json(tightly_coupeled_pairs, ground_truth_file_path)
+                class_pairs_file_name = f"prompt_R_{noise_ratio}_ground_truth.json"
+                class_pairs_file_path = os.path.join(output_dir, class_pairs_file_name)
+                if args.prompt_template == 'retrieval_based' or args.prompt_template == 'hybrid':
+                    ground_truth_file_name = f"prompt_R_{noise_ratio}_ground_truth.json"
+                    ground_truth_file_path = os.path.join(output_dir, ground_truth_file_name)
+                    ground_truth_pairs = tightly_coupeled_pairs
+                    if args.prompt_template == 'hybrid':
+                        non_coupled_pairs = [(_cls, None) for _cls in _noisy_classes]
+                        ground_truth_pairs.extend(non_coupled_pairs)
+                    save_to_json(ground_truth_pairs, ground_truth_file_path)
                 
                 elif args.prompt_template == 'binary_based':
                     print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of loosely coupled pairs: {len(loosely_coupled_pairs)}")
@@ -258,6 +292,12 @@ def main():
                     save_to_json(ground_truth_results, class_pairs_file_path)
 
                 save_to_json(metadata, metadata_file_path)
+
+    # Copy the config file to the output directory for reproducibility
+    config_file_name = os.path.basename(arguments.config_file)
+    config_file_path = os.path.join(output_dir, config_file_name)
+    shutil.copy(arguments.config_file, config_file_path)
+
 
         
 
