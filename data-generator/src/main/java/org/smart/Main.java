@@ -5,14 +5,10 @@ import org.smart.utils.DisjointClusterAnalyzer;
 import org.smart.utils.JSONWriter;
 import spoon.Launcher;
 import spoon.OutputType;
-import spoon.reflect.CtModel;
-import spoon.reflect.declaration.CtClass;
-import spoon.reflect.declaration.CtType;
-import spoon.reflect.reference.CtTypeReference;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Main {
     public static void main(String[] args) {
@@ -36,7 +32,8 @@ public class Main {
         launcher.getEnvironment().setAutoImports(true);
         launcher.getEnvironment().setCommentEnabled(true);
 
-        String outputDir = repositoryPath + "-transformed";
+        String concatenatedTranformations = transformations.stream().collect(Collectors.joining("_"));
+        String outputDir = repositoryPath + "-transformed_" + concatenatedTranformations;
         launcher.setSourceOutputDirectory(outputDir);
         launcher.getEnvironment().setOutputType(OutputType.COMPILATION_UNITS);
 
