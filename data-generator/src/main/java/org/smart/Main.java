@@ -1,9 +1,6 @@
 package org.smart;
 import org.smart.processors.*;
-import org.smart.utils.Dependency;
-import org.smart.utils.DisjointClusterAnalyzer;
-import org.smart.utils.JSONWriter;
-import org.smart.utils.PathUtils;
+import org.smart.utils.*;
 import spoon.Launcher;
 import spoon.OutputType;
 import java.io.File;
@@ -43,6 +40,8 @@ public class Main {
 
         String outputDir = Paths.get(outputPath, outputFolderName).toString();
         launcher.setSourceOutputDirectory(outputDir);
+
+
         launcher.getEnvironment().setOutputType(OutputType.COMPILATION_UNITS);
 
 
@@ -61,6 +60,10 @@ public class Main {
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
+                    break;
+                case "instantiationremover":
+                    System.out.println("Adding InstantiationRemoverProcessor to transformations...");
+                    launcher.addProcessor(new InstantiationRemoverProcessor());
                     break;
                 case "directinstantiation":
                     System.out.println("Applying Direct Instantiation transformation...");
@@ -93,8 +96,9 @@ public class Main {
         launcher.run();
 
         System.out.println("Transformations applied successfully.");
+        System.out.println("Number of modified assignment statements: "+InstantiationRemoverProcessor.modifiedClassesCounter);
+        launcher.prettyprint();
         System.out.println("Transformed code saved to: " + outputDir);
-
         if (didOccured || uidOccured) {
             // Report modified classes for DirectInstantiationProcessor and UnusedInjectedDependency
             Set<Map.Entry<String, String>> modifiedCalless = didOccured ? DirectInstantiationProcessor.modifiedCallees.entrySet() : UnusedInjectedDependencyProcessor.modifiedCallees.entrySet();
