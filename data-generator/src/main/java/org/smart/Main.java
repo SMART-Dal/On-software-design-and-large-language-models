@@ -3,23 +3,27 @@ import org.smart.processors.*;
 import org.smart.utils.Dependency;
 import org.smart.utils.DisjointClusterAnalyzer;
 import org.smart.utils.JSONWriter;
+import org.smart.utils.PathUtils;
 import spoon.Launcher;
 import spoon.OutputType;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class Main {
     public static void main(String[] args) {
         if (args.length < 2) {
-            System.err.println("Usage: java -jar software-design-perturbations.jar <repository-path> <transformations>");
-            System.err.println("Example: java -jar software-design-perturbations.jar /path/to/repo DirectInstantiation,DisableAbstraction");
+            System.err.println("Usage: java -jar software-design-perturbations.jar <repository-path> <output-path> <transformations>");
+            System.err.println("Example: java -jar software-design-perturbations.jar /path/to/repo /path/to/output DirectInstantiation,DisableAbstraction");
             System.exit(1);
         }
 
         String repositoryPath = args[0];
-        List<String> transformations = Arrays.asList(args[1].split(","));
+        String outputPath = args[1];
+        List<String> transformations = Arrays.asList(args[2].split(","));
 
         File repoDir = new File(repositoryPath);
         if (!repoDir.exists() || !repoDir.isDirectory()) {
@@ -33,7 +37,11 @@ public class Main {
         launcher.getEnvironment().setCommentEnabled(true);
 
         String concatenatedTranformations = transformations.stream().collect(Collectors.joining("_"));
-        String outputDir = repositoryPath + "-transformed_" + concatenatedTranformations;
+
+        String inputFolderName = PathUtils.getFolderName(repositoryPath);
+        String outputFolderName = inputFolderName + "-transformed_" + concatenatedTranformations;
+
+        String outputDir = Paths.get(outputPath, outputFolderName).toString();
         launcher.setSourceOutputDirectory(outputDir);
         launcher.getEnvironment().setOutputType(OutputType.COMPILATION_UNITS);
 
@@ -47,8 +55,9 @@ public class Main {
                     DisjointClusterAnalyzer.analyze(repositoryPath);
                     System.out.println("Finished generating the dependency graph of the project and extract all disjoint pairs. Saving on disk...");
                     try {
-                        String dependenciesOutputPath = repositoryPath+"_disjointPairs.json";
-                        JSONWriter.writeToJSON(dependenciesOutputPath, DisjointClusterAnalyzer.disjointPairs);
+                        String disjointPairsOutputPath = inputFolderName+"_disjointPairs.json";
+                        disjointPairsOutputPath = Paths.get(outputPath, disjointPairsOutputPath).toString();
+                        JSONWriter.writeToJSON(disjointPairsOutputPath, DisjointClusterAnalyzer.disjointPairs);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -99,7 +108,8 @@ public class Main {
             for (Map.Entry<String, String> entry : modifiedCallers) {
                 System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
             }
-            String dependenciesOutputPath = repositoryPath+"_dependencies.json";
+            String dependenciesOutputPath = inputFolderName+"_dependencies.json";
+            dependenciesOutputPath = Paths.get(outputPath, dependenciesOutputPath).toString();
             System.out.println("Saving dependencies mapping to: " + dependenciesOutputPath);
             try {
                 JSONWriter.writeToJSON(dependenciesOutputPath, modifiedClasses);
