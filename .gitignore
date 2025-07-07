@@ -1,6 +1,8 @@
+# Data folder that contains the projects, their perturbed versions and other metadata
+data
 # Compiled class file
 *.class
-
+spooned/
 # Log file
 *.log
 
@@ -27,3 +29,6 @@ replay_pid*
 .idea
 venv
 __pycache__
+output
+prompts_data
+prompts
