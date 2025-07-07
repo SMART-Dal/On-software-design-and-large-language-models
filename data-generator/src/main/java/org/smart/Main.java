@@ -96,8 +96,10 @@ public class Main {
         launcher.run();
 
         System.out.println("Transformations applied successfully.");
-        System.out.println("Number of modified assignment statements: "+InstantiationRemoverProcessor.modifiedClassesCounter);
-        launcher.prettyprint();
+        if (SetUtils.containsStringList(transformations, "instantiationremover")) {
+            System.out.println("Number of modified assignment statements: "+InstantiationRemoverProcessor.modifiedClassesCounter);
+        }
+
         System.out.println("Transformed code saved to: " + outputDir);
         if (didOccured || uidOccured) {
             // Report modified classes for DirectInstantiationProcessor and UnusedInjectedDependency
@@ -112,7 +114,7 @@ public class Main {
             for (Map.Entry<String, String> entry : modifiedCallers) {
                 System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
             }
-            String dependenciesOutputPath = inputFolderName+"_dependencies.json";
+            String dependenciesOutputPath = inputFolderName+"_mutated_classes.json";
             dependenciesOutputPath = Paths.get(outputPath, dependenciesOutputPath).toString();
             System.out.println("Saving dependencies mapping to: " + dependenciesOutputPath);
             try {
