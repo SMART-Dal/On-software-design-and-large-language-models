@@ -1,0 +1,745 @@
+
+You are an expert software engineer that understands code quality. You are given a Java project named jmeter-2.5.1. Below is the content of its README file to provide context about its purpose:
+## README:
+**Apache JMeter** is a pure Java application designed for performance testing and measurement. It serves as a portable server benchmark tool and multi-client load generator to simulate heavy traffic and assess system performance.  
+
+**Key Features**:  
+- Requires Java 1.5 or later.  
+- Supports optional extensions (e.g., JDBC, JMS) via third-party libraries.  
+- Provides HTTPS support (via JSSE) and NTLM authentication (via JCE) but does not include these cryptographic implementations.  
+
+JMeter enables GUI or non-GUI test execution and is built for scalability, supporting performance analysis across diverse environments.
+
+
+## Task:
+You will be given a list of Java classes and your task is to determine which classes they are tightly coupled with from a bigger list, if any. Tightly coupled classes are those with strong dependencies, where one or both classes rely heavily on the other, making them difficult to modify or test independently. The list of names of classes is as follows:
+
+['RemoteTestListenerWrapper', 'TCPClientDecorator', 'BatchSampleSender', 'HoldSampleSender', 'DataStrippingSampleSender', 'HTTPAbstractImpl', 'RemoteListenerWrapper']
+
+At the end of the prompt, you will be provided with the body of all classes. You should analyze the code and determine which classes from the list below, are tightly coupled with those mentioned above. Note that you should NOT consider primitive types (e.g., int, float) as classes.
+
+## Response Format:
+Assuming you are given this list of class names: ["Class1", "Class2", "Class3"]
+
+And the following list of class bodies:
+- Class1
+- Class2
+- Class3
+- Class8
+- Class9
+- Class10
+
+You must provide your response in the following format:
+```json
+[
+    ["Class1", "Class8"],
+    [Class1, "Class9"],
+    ["Class2", "None"],
+    ["Class3", "Class10"]
+    ...
+]
+```
+In this scenario, Class1 is tightly coupled with classes Class8 and Class9, Class2 is not coupled with none of the classes and Class3 is tightly coupled with Class10. You should only provide a classe's simple name, where the simple name is the class name without the package prefix (e.g., 'Class' instead of 'com.foo.bar.Class'). Do not include any additional text or explanations. Just provide the JSON response.
+## Classes:
+org/apache/jmeter/samplers/HoldSampleSender.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class HoldSampleSender implements SampleSender , Serializable {...}
+==================================================
+org/apache/jmeter/samplers/SampleSender.java
+package org.apache.jmeter.samplers;
+public interface SampleSender {
+    public void testEnded();
+    public void testEnded(String host);
+    public void sampleOccurred(SampleEvent e);
+}
+==================================================
+org/apache/jmeter/samplers/RemoteSampleListenerImpl.java
+package org.apache.jmeter.samplers;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.List;
+import org.apache.jmeter.engine.event.LoopIterationEvent;
+import org.apache.jmeter.testelement.TestListener;
+public class RemoteSampleListenerImpl extends UnicastRemoteObject implements RemoteSampleListener , SampleListener , TestListener {...}
+==================================================
+org/apache/jmeter/protocol/http/sampler/HTTPAbstractImpl.java
+package org.apache.jmeter.protocol.http.sampler;
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import org.apache.jmeter.config.Arguments;
+import org.apache.jmeter.protocol.http.control.AuthManager;
+import org.apache.jmeter.protocol.http.control.CacheManager;
+import org.apache.jmeter.protocol.http.control.CookieManager;
+import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.util.HTTPConstantsInterface;
+import org.apache.jmeter.protocol.http.util.HTTPFileArg;
+import org.apache.jmeter.samplers.Interruptible;
+import org.apache.jmeter.samplers.SampleResult;
+public abstract class HTTPAbstractImpl implements Interruptible , HTTPConstantsInterface {
+    protected final HTTPSamplerBase testElement;
+    protected HTTPAbstractImpl(HTTPSamplerBase testElement) {
+        this.testElement = new HTTPSampler3();
+    }
+    protected abstract HTTPSampleResult sample(URL url, String method, boolean areFollowingRedirect, int frameDepth);
+    protected void threadFinished() {
+    }
+    protected HTTPSampleResult errorResult(Throwable t, HTTPSampleResult res) {
+        return testElement.errorResult(t, res);
+    }
+    protected Arguments getArguments() {
+        return testElement.getArguments();
+    }
+    protected AuthManager getAuthManager() {
+        return testElement.getAuthManager();
+    }
+    protected boolean getAutoRedirects() {
+        return testElement.getAutoRedirects();
+    }
+    protected CacheManager getCacheManager() {
+        return testElement.getCacheManager();
+    }
+    protected int getConnectTimeout() {
+        return testElement.getConnectTimeout();
+    }
+    protected String getContentEncoding() {
+        return testElement.getContentEncoding();
+    }
+    protected CookieManager getCookieManager() {
+        return testElement.getCookieManager();
+    }
+    protected HeaderManager getHeaderManager() {
+        return testElement.getHeaderManager();
+    }
+    protected HTTPFileArg[] getHTTPFiles() {
+        return testElement.getHTTPFiles();
+    }
+    protected String getIpSource() {
+        return testElement.getIpSource();
+    }
+    protected String getProxyHost() {
+        return testElement.getProxyHost();
+    }
+    protected String getProxyPass() {
+        return testElement.getProxyPass();
+    }
+    protected int getProxyPortInt() {
+        return testElement.getProxyPortInt();
+    }
+    protected String getProxyUser() {
+        return testElement.getProxyUser();
+    }
+    protected int getResponseTimeout() {
+        return testElement.getResponseTimeout();
+    }
+    protected boolean getSendFileAsPostBody() {
+        return testElement.getSendFileAsPostBody();
+    }
+    protected boolean getSendParameterValuesAsPostBody() {
+        return testElement.getSendParameterValuesAsPostBody();
+    }
+    protected boolean getUseKeepAlive() {
+        return testElement.getUseKeepAlive();
+    }
+    protected boolean getUseMultipartForPost() {
+        return testElement.getUseMultipartForPost();
+    }
+    protected boolean getDoBrowserCompatibleMultipart() {
+        return testElement.getDoBrowserCompatibleMultipart();
+    }
+    protected boolean hasArguments() {
+        return testElement.hasArguments();
+    }
+    protected boolean isMonitor() {
+        return testElement.isMonitor();
+    }
+    protected boolean isSuccessCode(int errorLevel) {
+        return testElement.isSuccessCode(errorLevel);
+    }
+    protected byte[] readResponse(SampleResult res, InputStream instream, int responseContentLength) throws IOException {
+        return testElement.readResponse(res, instream, responseContentLength);
+    }
+    protected byte[] readResponse(SampleResult res, BufferedInputStream in, int contentLength) throws IOException {
+        return testElement.readResponse(res, in, contentLength);
+    }
+    protected HTTPSampleResult resultProcessing(boolean areFollowingRedirect, int frameDepth, HTTPSampleResult res) {
+        return testElement.resultProcessing(areFollowingRedirect, frameDepth, res);
+    }
+    protected void setUseKeepAlive(boolean b) {
+        testElement.setUseKeepAlive(b);
+    }
+    protected void notifySSLContextWasReset() {
+    }
+}
+==================================================
+org/apache/jmeter/protocol/tcp/sampler/AbstractTCPClient.java
+package org.apache.jmeter.protocol.tcp.sampler;
+public abstract class AbstractTCPClient implements TCPClient {...}
+==================================================
+org/apache/jmeter/protocol/http/sampler/HTTPSamplerBase.java
+package org.apache.jmeter.protocol.http.sampler;
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import org.apache.commons.io.IOUtils;
+import org.apache.jmeter.config.Argument;
+import org.apache.jmeter.config.Arguments;
+import org.apache.jmeter.engine.event.LoopIterationEvent;
+import org.apache.jmeter.protocol.http.control.AuthManager;
+import org.apache.jmeter.protocol.http.control.CacheManager;
+import org.apache.jmeter.protocol.http.control.CookieManager;
+import org.apache.jmeter.protocol.http.control.HeaderManager;
+import org.apache.jmeter.protocol.http.parser.HTMLParseException;
+import org.apache.jmeter.protocol.http.parser.HTMLParser;
+import org.apache.jmeter.protocol.http.util.ConversionUtils;
+import org.apache.jmeter.protocol.http.util.EncoderCache;
+import org.apache.jmeter.protocol.http.util.HTTPArgument;
+import org.apache.jmeter.protocol.http.util.HTTPConstantsInterface;
+import org.apache.jmeter.protocol.http.util.HTTPFileArg;
+import org.apache.jmeter.protocol.http.util.HTTPFileArgs;
+import org.apache.jmeter.samplers.AbstractSampler;
+import org.apache.jmeter.samplers.Entry;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.TestListener;
+import org.apache.jmeter.testelement.ThreadListener;
+import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.IntegerProperty;
+import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.PropertyIterator;
+import org.apache.jmeter.testelement.property.StringProperty;
+import org.apache.jmeter.testelement.property.TestElementProperty;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jmeter.util.JsseSSLManager;
+import org.apache.jmeter.util.SSLManager;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.jorphan.util.JOrphanUtils;
+import org.apache.log.Logger;
+import org.apache.oro.text.MalformedCachePatternException;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.Perl5Matcher;
+public abstract class HTTPSamplerBase extends AbstractSampler implements TestListener , ThreadListener , HTTPConstantsInterface {...}
+==================================================
+org/apache/jmeter/samplers/RemoteListenerWrapper.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import java.rmi.RemoteException;
+import org.apache.jmeter.engine.event.LoopIterationEvent;
+import org.apache.jmeter.engine.util.NoThreadClone;
+import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.TestListener;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class RemoteListenerWrapper extends AbstractTestElement implements SampleListener , TestListener , Serializable , NoThreadClone {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final long serialVersionUID = 240L;
+    private final RemoteSampleListener listener;
+    private final SampleSender sender;
+    public RemoteListenerWrapper(RemoteSampleListener l) {
+        listener = new RemoteSampleListenerImpl();
+        sender = SampleSenderFactory.getInstance(listener);
+    }
+    public RemoteListenerWrapper() {
+        listener = null;
+        sender = null;
+    }
+    public void testStarted() {
+        log.debug("Test Started()");
+        try {
+            listener.testStarted();
+        } catch (Throwable ex) {
+            log.warn("testStarted()", ex);
+            if (ex instanceof Error) {
+                throw ((Error) (ex));
+            }
+            if (ex instanceof RuntimeException) {
+                throw ((RuntimeException) (ex));
+            }
+        }
+    }
+    public void testEnded() {
+        sender.testEnded();
+    }
+    public void testStarted(String host) {
+        log.debug("Test Started on " + host);
+        try {
+            listener.testStarted(host);
+        } catch (Throwable ex) {
+            log.error("testStarted(host)", ex);
+            if (ex instanceof Error) {
+                throw ((Error) (ex));
+            }
+            if (ex instanceof RuntimeException) {
+                throw ((RuntimeException) (ex));
+            }
+        }
+    }
+    public void testEnded(String host) {
+        sender.testEnded(host);
+    }
+    public void sampleOccurred(SampleEvent e) {
+        sender.sampleOccurred(e);
+    }
+    public void sampleStarted(SampleEvent e) {
+        log.debug("Sample started");
+        try {
+            listener.sampleStarted(e);
+        } catch (RemoteException err) {
+            log.error("sampleStarted", err);
+        }
+    }
+    public void sampleStopped(SampleEvent e) {
+        log.debug("Sample stopped");
+        try {
+            listener.sampleStopped(e);
+        } catch (RemoteException err) {
+            log.error("sampleStopped", err);
+        }
+    }
+    public void testIterationStart(LoopIterationEvent event) {
+    }
+}
+==================================================
+org/apache/jorphan/TestFunctorUsers.java
+package org.apache.jorphan;
+import org.apache.jmeter.config.gui.ArgumentsPanel;
+import org.apache.jmeter.junit.JMeterTestCase;
+import org.apache.jmeter.protocol.http.gui.HTTPArgumentsPanel;
+import org.apache.jmeter.protocol.ldap.config.gui.LDAPArgumentsPanel;
+import org.apache.jmeter.visualizers.StatGraphVisualizer;
+import org.apache.jmeter.visualizers.StatVisualizer;
+import org.apache.jmeter.visualizers.SummaryReport;
+import org.apache.jmeter.visualizers.TableVisualizer;
+public class TestFunctorUsers extends JMeterTestCase {
+    public TestFunctorUsers(String arg0) {
+        super(arg0);
+    }
+    @SuppressWarnings("deprecation")
+    public void testSummaryReport() throws Exception {
+        assertTrue("SummaryReport Functor", SummaryReport.testFunctors());
+    }
+    public void testTableVisualizer() throws Exception {
+        assertTrue("TableVisualizer Functor", TableVisualizer.testFunctors());
+    }
+    public void testStatGraphVisualizer() throws Exception {
+        assertTrue("StatGraphVisualizer Functor", StatGraphVisualizer.testFunctors());
+    }
+    @SuppressWarnings("deprecation")
+    public void testStatVisualizer() throws Exception {
+        assertTrue("StatVisualizer Functor", StatVisualizer.testFunctors());
+    }
+    public void testArgumentsPanel() throws Exception {
+        assertTrue("ArgumentsPanel Functor", ArgumentsPanel.testFunctors());
+    }
+    public void testHTTPArgumentsPanel() throws Exception {
+        assertTrue("HTTPArgumentsPanel Functor", HTTPArgumentsPanel.testFunctors());
+    }
+    public void testLDAPArgumentsPanel() throws Exception {
+        assertTrue("LDAPArgumentsPanel Functor", LDAPArgumentsPanel.testFunctors());
+    }
+}
+==================================================
+org/apache/jmeter/protocol/http/sampler/HTTPSampler3.java
+package org.apache.jmeter.protocol.http.sampler;
+import org.apache.jmeter.samplers.Interruptible;
+class HTTPSampler3 extends HTTPSamplerBase implements Interruptible {...}
+==================================================
+org/apache/jmeter/samplers/Entry.java
+package org.apache.jmeter.samplers;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import org.apache.jmeter.assertions.Assertion;
+import org.apache.jmeter.config.ConfigElement;
+public class Entry {
+    private Map<Class<?>, ConfigElement> configSet;
+    private Class<?> sampler;
+    private List<Assertion> assertions;
+    public Entry() {
+        configSet = new HashMap<Class<?>, ConfigElement>();
+        assertions = new LinkedList<Assertion>();
+    }
+    public void addAssertion(Assertion assertion) {
+        assertions.add(assertion);
+    }
+    public List<Assertion> getAssertions() {
+        return assertions;
+    }
+    public void setSamplerClass(Class<?> samplerClass) {
+        this.sampler = samplerClass;
+    }
+    public Class<?> getSamplerClass() {
+        return this.sampler;
+    }
+    public ConfigElement getConfigElement(Class<?> configClass) {
+        return configSet.get(configClass);
+    }
+    public void addConfigElement(ConfigElement config) {
+        addConfigElement(config, config.getClass());
+    }
+    public void addConfigElement(ConfigElement config, Class<?> asClass) {
+        if (config != null) {
+            ConfigElement current = configSet.get(asClass);
+            if (current == null) {
+                configSet.put(asClass, cloneIfNecessary(config));
+            } else {
+                current.addConfigElement(config);
+            }
+        }
+    }
+    private ConfigElement cloneIfNecessary(ConfigElement config) {
+        if (config.expectsModification()) {
+            return config;
+        }
+        return ((ConfigElement) (config.clone()));
+    }
+}
+==================================================
+org/apache/jmeter/samplers/RemoteSampleListener.java
+package org.apache.jmeter.samplers;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+import java.util.List;
+public interface RemoteSampleListener extends Remote {
+    public void testStarted() throws RemoteException;
+    public void testStarted(String host) throws RemoteException;
+    public void testEnded() throws RemoteException;
+    public void testEnded(String host) throws RemoteException;
+    public void processBatch(List<SampleEvent> samples) throws RemoteException;
+    public void sampleOccurred(SampleEvent e) throws RemoteException;
+    public void sampleStarted(SampleEvent e) throws RemoteException;
+    public void sampleStopped(SampleEvent e) throws RemoteException;
+}
+==================================================
+org/apache/jmeter/samplers/BatchSampleSender.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import java.rmi.RemoteException;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class BatchSampleSender implements SampleSender , Serializable {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final long serialVersionUID = 240L;
+    private static final int DEFAULT_NUM_SAMPLE_THRESHOLD = 100;
+    private static final long DEFAULT_TIME_THRESHOLD = 60000L;
+    private static final int NUM_SAMPLES_THRESHOLD = JMeterUtils.getPropDefault("num_sample_threshold", DEFAULT_NUM_SAMPLE_THRESHOLD); 
+    private static final long TIME_THRESHOLD_MS = JMeterUtils.getPropDefault("time_threshold", DEFAULT_TIME_THRESHOLD); 
+    private final RemoteSampleListener listener;
+    private final List<SampleEvent> sampleStore = new ArrayList<SampleEvent>();
+    private long batchSendTime = -1;
+    static {
+        log.info(((("Using batching for this run." + " Thresholds: num=") + NUM_SAMPLES_THRESHOLD) + ", time=") + TIME_THRESHOLD_MS);
+    }
+    @Deprecated
+    public BatchSampleSender() {
+        log.warn("Constructor only intended for use in testing"); 
+        listener = null;
+    }
+    protected BatchSampleSender(RemoteSampleListener listener) {
+        this.listener = new RemoteSampleListenerImpl();
+    }
+    protected RemoteSampleListener getListener() {
+        return listener;
+    }
+    protected List<SampleEvent> getSampleStore() {
+        return sampleStore;
+    }
+    public void testEnded() {
+        try {
+            if (sampleStore.size() != 0) {
+                listener.processBatch(sampleStore);
+                sampleStore.clear();
+            }
+            listener.testEnded();
+        } catch (RemoteException err) {
+            log.error("testEnded()", err);
+        }
+    }
+    public void testEnded(String host) {
+        try {
+            if (sampleStore.size() != 0) {
+                listener.processBatch(sampleStore);
+                sampleStore.clear();
+            }
+            listener.testEnded(host);
+        } catch (RemoteException err) {
+            log.error("testEnded(host)", err);
+        }
+    }
+    public void sampleOccurred(SampleEvent e) {
+        synchronized(sampleStore) {
+            sampleStore.add(e);
+            final int sampleCount = sampleStore.size();
+            boolean sendNow = false;
+            if (NUM_SAMPLES_THRESHOLD != (-1)) {
+                if (sampleCount >= NUM_SAMPLES_THRESHOLD) {
+                    sendNow = true;
+                }
+            }
+            long now = 0;
+            if (TIME_THRESHOLD_MS != (-1)) {
+                now = System.currentTimeMillis();
+                if (batchSendTime == (-1)) {
+                    this.batchSendTime = now + TIME_THRESHOLD_MS;
+                }
+                if ((batchSendTime < now) && (sampleCount > 0)) {
+                    sendNow = true;
+                }
+            }
+            if (sendNow) {
+                try {
+                    log.debug("Firing sample");
+                    listener.processBatch(sampleStore);
+                    sampleStore.clear();
+                    if (TIME_THRESHOLD_MS != (-1)) {
+                        this.batchSendTime = now + TIME_THRESHOLD_MS;
+                    }
+                } catch (RemoteException err) {
+                    log.error("sampleOccurred", err);
+                }
+            }
+        } 
+    }
+}
+==================================================
+org/apache/jmeter/timers/ConstantThroughputTimerBeanInfo.java
+package org.apache.jmeter.timers;
+import java.beans.PropertyDescriptor;
+import java.util.ResourceBundle;
+import org.apache.jmeter.testbeans.BeanInfoSupport;
+public class ConstantThroughputTimerBeanInfo extends BeanInfoSupport {
+    private static final String[] tags = new String[5];
+    public ConstantThroughputTimerBeanInfo() {
+        super(ConstantThroughputTimer.class);
+        ResourceBundle rb = ((ResourceBundle) (getBeanDescriptor().getValue(RESOURCE_BUNDLE)));
+        tags[0] = rb.getString("calcMode.1"); 
+        tags[1] = rb.getString("calcMode.2"); 
+        tags[2] = rb.getString("calcMode.3"); 
+        tags[3] = rb.getString("calcMode.4"); 
+        tags[4] = rb.getString("calcMode.5"); 
+        createPropertyGroup("delay", new String[]{ "throughput" 
+        , "calcMode" }); 
+        PropertyDescriptor p = property("throughput"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, new Double(0.0));
+        p = property("calcMode"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, tags[0]);
+        p.setValue(NOT_OTHER, Boolean.TRUE);
+        p.setValue(NOT_EXPRESSION, Boolean.TRUE);
+        p.setValue(TAGS, tags);
+    }
+    public static int getCalcModeAsInt(String mode) {
+        for (int i = 0; i < tags.length; i++) {
+            if (tags[i].equals(mode)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+}
+==================================================
+org/apache/jmeter/samplers/RemoteTestListenerWrapper.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import org.apache.jmeter.engine.event.LoopIterationEvent;
+import org.apache.jmeter.engine.util.NoThreadClone;
+import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.TestListener;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class RemoteTestListenerWrapper extends AbstractTestElement implements TestListener , Serializable , NoThreadClone {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final long serialVersionUID = 240L;
+    private final RemoteSampleListener listener;
+    public RemoteTestListenerWrapper() {
+        log.warn("Only intended for use in testing");
+        listener = null;
+    }
+    public RemoteTestListenerWrapper(RemoteSampleListener l) {
+        listener = new RemoteSampleListenerImpl();
+    }
+    public void testStarted() {
+        try {
+            listener.testStarted();
+        } catch (Exception ex) {
+            log.error("", ex); 
+        }
+    }
+    public void testEnded() {
+        try {
+            listener.testEnded();
+        } catch (Exception ex) {
+            log.error("", ex); 
+        }
+    }
+    public void testStarted(String host) {
+        try {
+            listener.testStarted(host);
+        } catch (Exception ex) {
+            log.error("", ex); 
+        }
+    }
+    public void testEnded(String host) {
+        try {
+            listener.testEnded(host);
+        } catch (Exception ex) {
+            log.error("", ex); 
+        }
+    }
+    public void testIterationStart(LoopIterationEvent event) {
+    }
+}
+==================================================
+org/apache/jmeter/protocol/tcp/sampler/TCPClient.java
+package org.apache.jmeter.protocol.tcp.sampler;
+import java.io.InputStream;
+import java.io.OutputStream;
+public interface TCPClient {
+    void setupTest();
+    void teardownTest();
+    void write(OutputStream os, InputStream is);
+    void write(OutputStream os, String s);
+    String read(InputStream is);
+    public byte getEolByte();
+    public void setEolByte(int eolInt);
+}
+==================================================
+org/apache/jmeter/protocol/tcp/sampler/TCPClientDecorator.java
+package org.apache.jmeter.protocol.tcp.sampler;
+public abstract class TCPClientDecorator extends AbstractTCPClient {
+    protected final TCPClient tcpClient; 
+    public TCPClientDecorator(TCPClient tcpClient) {
+        this.tcpClient = new BinaryTCPClientImpl();
+    }
+    public static byte[] intToByteArray(int value, int len) {
+        if ((len == 2) || (len == 4)) {
+            if ((len == 2) && ((value < Short.MIN_VALUE) || (value > Short.MAX_VALUE))) {
+                throw new IllegalArgumentException("Value outside range for signed short int.");
+            } else {
+                byte[] b = new byte[len];
+                for (int i = 0; i < len; i++) {
+                    int offset = ((b.length - 1) - i) * 8;
+                    b[i] = ((byte) (value >>> offset));
+                }
+                return b;
+            }
+        } else {
+            throw new IllegalArgumentException("Length must be specified as either 2 or 4.");
+        }
+    }
+    public static int byteArrayToInt(byte[] b) {
+        if ((b != null) && ((b.length == 2) || (b.length == 4))) {
+            int value = b[0] << ((b.length - 1) * 8);
+            for (int i = 1; i < b.length; i++) {
+                int offset = ((b.length - 1) - i) * 8;
+                value += (b[i] & 0xff) << offset;
+            }
+            return value;
+        } else {
+            throw new IllegalArgumentException("Byte array is null or invalid length.");
+        }
+    }
+}
+==================================================
+org/apache/jmeter/protocol/tcp/sampler/BinaryTCPClientImpl.java
+package org.apache.jmeter.protocol.tcp.sampler;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.io.OutputStream;
+import java.net.SocketTimeoutException;
+import org.apache.commons.io.IOUtils;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.jorphan.util.JOrphanUtils;
+import org.apache.log.Logger;
+public class BinaryTCPClientImpl extends AbstractTCPClient {...}
+==================================================
+org/apache/jmeter/samplers/DataStrippingSampleSender.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import java.rmi.RemoteException;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class DataStrippingSampleSender implements SampleSender , Serializable {
+    private static final long serialVersionUID = 1;
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private final RemoteSampleListener listener;
+    private final SampleSender decoratedSender;
+    static {
+        log.info("Using DataStrippingSampleSender for this run");
+    }
+    @Deprecated
+    public DataStrippingSampleSender() {
+        log.warn("Constructor only intended for use in testing"); 
+        listener = null;
+        decoratedSender = null;
+    }
+    DataStrippingSampleSender(RemoteSampleListener listener) {
+        this.listener = new RemoteSampleListenerImpl();
+        decoratedSender = null;
+    }
+    DataStrippingSampleSender(SampleSender decorate) {
+        this.decoratedSender = new HoldSampleSender();
+        this.listener = null;
+    }
+    public void testEnded() {
+        if (decoratedSender != null)
+            decoratedSender.testEnded();
+    }
+    public void testEnded(String host) {
+        if (decoratedSender != null)
+            decoratedSender.testEnded(host);
+    }
+    public void sampleOccurred(SampleEvent event) {
+        SampleResult result = event.getResult();
+        if (result.isSuccessful()) {
+            result.setResponseData(new byte[0]);
+        }
+        if (decoratedSender == null) {
+            try {
+                listener.sampleOccurred(event);
+            } catch (RemoteException e) {
+                log.error("Error sending sample result over network ", e);
+            }
+        } else {
+            decoratedSender.sampleOccurred(event);
+        }
+    }
+}
+==================================================
+

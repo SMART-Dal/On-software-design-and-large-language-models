@@ -1,0 +1,2516 @@
+
+You are an expert software engineer that understands code quality. You are given a Java project named jmeter-2.5.1. Below is the content of its README file to provide context about its purpose:
+
+## README:
+**Apache JMeter** is a pure Java application designed for performance testing and measurement. It serves as a portable server benchmark tool and multi-client load generator to simulate heavy traffic and assess system performance.  
+
+**Key Features**:  
+- Requires Java 1.5 or later.  
+- Supports optional extensions (e.g., JDBC, JMS) via third-party libraries.  
+- Provides HTTPS support (via JSSE) and NTLM authentication (via JCE) but does not include these cryptographic implementations.  
+
+JMeter enables GUI or non-GUI test execution and is built for scalability, supporting performance analysis across diverse environments.
+
+
+## Task:
+You will be given a list of pairs of Java classes and your task is to determine whether they are tightly coupled or not. Tightly coupled classes are those with strong dependencies on each other, making them difficult to modify or test independently. The list of pairs of classes is as follows:
+
+[('ExampleSamplerGui', 'IntSum'), ('SwitchControllerGui', 'LoopbackHTTPSocket'), ('TransactionSampler', 'SmtpSampler'), ('JMeterContext', 'SetupThreadGroup'), ('SetProperty', 'HashTreeConverter'), ('SplineModel', 'SplineVisualizer'), ('ClassTools', 'JDBCSamplerBeanInfo'), ('FixedQueueExecutor', 'EvalVarFunction'), ('DummyTestCase', 'AddToTree'), ('Close', 'XMLBuffer'), ('TestElementProperty', 'MailReaderSampler'), ('RemoteListenerWrapper', 'StandardSampleSender'), ('AsynchSampleSender', 'RemoteSampleListenerImpl'), ('Argument', 'ReportAddToTree')]
+
+At the end of the prompt, you will be provided with the body of each class. You should analyze the code and determine whether the classes in each pair above are tightly coupled or not. Note that you should NOT consider primitive types (e.g., int, float) as classes.
+
+## Response Format:
+For each pair, you must provide your response in the following format:
+```json
+{
+    "pair": <PAIR-NAME>,
+    "coupled": TRUE/FALSE,
+}
+```
+For example, if you are provided with the following list of pairs:
+```
+[
+    ["ClassA", "ClassB"],
+    ["ClassC", "ClassD"]
+]
+```
+You should provide the following response:
+```json
+[
+    {
+        "pair": ["ClassA", "ClassB"],
+        "coupled": TRUE
+    },
+    {
+        "pair": ["ClassC", "ClassD"],
+        "coupled": FALSE
+    }
+]
+```
+Do not include any additional text or explanations. Just provide the JSON response.
+## Classes:
+org/apache/jmeter/protocol/http/util/LoopbackHTTPSocket.java
+package org.apache.jmeter.protocol.http.util;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
+public class LoopbackHTTPSocket extends Socket {
+    static class LoopbackOutputStream extends ByteArrayOutputStream {
+        byte[] getBuffer() {
+            return buf;
+        }
+    }
+    static class LoopBackInputStream extends ByteArrayInputStream {
+        private LoopbackOutputStream os;
+        @Override
+        public synchronized int read() {
+            buf = os.getBuffer(); 
+            count = buf.length; 
+            return super.read();
+        }
+        @Override
+        public synchronized int read(byte[] b, int off, int len) {
+            buf = os.getBuffer();
+            count = buf.length;
+            return super.read(b, off, len);
+        }
+        public LoopBackInputStream(LoopbackOutputStream _os) {
+            super(_os.getBuffer());
+            os = _os;
+        }
+    }
+    private final LoopbackOutputStream os;
+    private LoopbackHTTPSocket() throws IOException {
+        os = new LoopbackOutputStream();
+        os.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n".getBytes()); 
+    }
+    public LoopbackHTTPSocket(String host, int port, InetAddress localAddress, int localPort, int timeout) throws IOException {
+        this();
+    }
+    public LoopbackHTTPSocket(String host, int port, InetAddress localAddr, int localPort) throws IOException {
+        this();
+    }
+    public LoopbackHTTPSocket(String host, int port) throws UnknownHostException, IOException {
+        this();
+    }
+    @Override
+    public OutputStream getOutputStream() throws IOException {
+        return os;
+    }
+    @Override
+    public InputStream getInputStream() throws IOException {
+        return new LoopBackInputStream(os);
+    }
+}
+==================================================
+org/apache/jmeter/threads/JMeterContext.java
+package org.apache.jmeter.threads;
+import org.apache.jmeter.engine.StandardJMeterEngine;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.samplers.Sampler;
+public class JMeterContext {
+    private JMeterVariables variables;
+    private SampleResult previousResult;
+    private Sampler currentSampler;
+    private Sampler previousSampler;
+    private boolean samplingStarted;
+    private StandardJMeterEngine engine;
+    private JMeterThread thread;
+    private AbstractThreadGroup threadGroup = new SetupThreadGroup();
+    private int threadNum;
+    private byte[] readBuffer = null;
+    private boolean isReinitSubControllers = false;
+    JMeterContext() {
+        clear0();
+    }
+    public void clear() {
+        clear0();
+    }
+    private void clear0() {
+        variables = null;
+        previousResult = null;
+        currentSampler = null;
+        previousSampler = null;
+        samplingStarted = false;
+        threadNum = 0;
+        readBuffer = null;
+        thread = null;
+        isReinitSubControllers = false;
+    }
+    public JMeterVariables getVariables() {
+        return variables;
+    }
+    public byte[] getReadBuffer() {
+        if (readBuffer == null) {
+            readBuffer = new byte[8192];
+        }
+        return readBuffer;
+    }
+    public void setVariables(JMeterVariables vars) {
+        this.variables = vars;
+    }
+    public SampleResult getPreviousResult() {
+        return previousResult;
+    }
+    public void setPreviousResult(SampleResult result) {
+        this.previousResult = result;
+    }
+    public Sampler getCurrentSampler() {
+        return currentSampler;
+    }
+    public void setCurrentSampler(Sampler sampler) {
+        this.previousSampler = currentSampler;
+        this.currentSampler = sampler;
+    }
+    public Sampler getPreviousSampler() {
+        return previousSampler;
+    }
+    public int getThreadNum() {
+        return threadNum;
+    }
+    public void setThreadNum(int threadNum) {
+        this.threadNum = threadNum;
+    }
+    public JMeterThread getThread() {
+        return this.thread;
+    }
+    public void setThread(JMeterThread thread) {
+        this.thread = thread;
+    }
+    public AbstractThreadGroup getThreadGroup() {
+        return this.threadGroup;
+    }
+    public StandardJMeterEngine getEngine() {
+        return engine;
+    }
+    public void setEngine(StandardJMeterEngine engine) {
+        this.engine = engine;
+    }
+    public boolean isSamplingStarted() {
+        return samplingStarted;
+    }
+    public void setSamplingStarted(boolean b) {
+        samplingStarted = b;
+    }
+    public void unsetIsReinitializingSubControllers() {
+        if (isReinitSubControllers) {
+            isReinitSubControllers = false;
+        }
+    }
+    public boolean setIsReinitializingSubControllers() {
+        if (!isReinitSubControllers) {
+            isReinitSubControllers = true;
+            return true;
+        }
+        return false;
+    }
+    public boolean isReinitializingSubControllers() {
+        return isReinitSubControllers;
+    }
+}
+==================================================
+org/apache/jmeter/threads/SetupThreadGroup.java
+package org.apache.jmeter.threads;
+public class SetupThreadGroup extends ThreadGroup {...}
+==================================================
+org/apache/jmeter/protocol/mail/sampler/MailReaderSampler.java
+package org.apache.jmeter.protocol.mail.sampler;
+import Flags.Flag;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.util.Enumeration;
+import java.util.Properties;
+import org.apache.commons.io.IOUtils;
+import org.apache.jmeter.protocol.smtp.sampler.gui.SecuritySettingsPanel;
+import org.apache.jmeter.protocol.smtp.sampler.protocol.LocalTrustStoreSSLSocketFactory;
+import org.apache.jmeter.protocol.smtp.sampler.protocol.TrustAllSSLSocketFactory;
+import org.apache.jmeter.samplers.AbstractSampler;
+import org.apache.jmeter.samplers.Entry;
+import org.apache.jmeter.samplers.Interruptible;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.services.FileServer;
+import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.IntegerProperty;
+import org.apache.jmeter.testelement.property.StringProperty;
+import org.apache.jorphan.logging.LoggingManager;
+import javax.mail.Address;
+import javax.mail.BodyPart;
+import javax.mail.Flags;
+import javax.mail.Folder;
+import javax.mail.Header;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Session;
+import javax.mail.Store;
+import javax.mail.internet.MimeMultipart;
+import javax.mail.internet.MimeUtility;
+import org.apache.log.Logger;
+public class MailReaderSampler extends AbstractSampler implements Interruptible {...}
+==================================================
+org/apache/jmeter/protocol/jdbc/sampler/JDBCSamplerBeanInfo.java
+package org.apache.jmeter.protocol.jdbc.sampler;
+import java.beans.PropertyDescriptor;
+import org.apache.jmeter.testbeans.BeanInfoSupport;
+import org.apache.jmeter.testbeans.gui.TextAreaEditor;
+public class JDBCSamplerBeanInfo extends BeanInfoSupport {
+    public JDBCSamplerBeanInfo() {
+        super(JDBCSampler.class);
+        createPropertyGroup("varName", new String[]{ "dataSource" }); 
+        createPropertyGroup("sql", new String[]{ "queryType" 
+        , "query" 
+        , "queryArguments" 
+        , "queryArgumentsTypes" 
+        , "variableNames" 
+        , "resultVariable" 
+         });
+        PropertyDescriptor p = property("dataSource"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, "");
+        p = property("queryArguments"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, "");
+        p = property("queryArgumentsTypes"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, "");
+        p = property("variableNames"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, "");
+        p = property("resultVariable"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, "");
+        p = property("queryType"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, JDBCSampler.SELECT);
+        p.setValue(NOT_OTHER, Boolean.TRUE);
+        p.setValue(TAGS, new String[]{ JDBCSampler.SELECT, JDBCSampler.UPDATE, JDBCSampler.CALLABLE, JDBCSampler.PREPARED_SELECT, JDBCSampler.PREPARED_UPDATE, JDBCSampler.COMMIT, JDBCSampler.ROLLBACK, JDBCSampler.AUTOCOMMIT_FALSE, JDBCSampler.AUTOCOMMIT_TRUE });
+        p = property("query"); 
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, "");
+        p.setPropertyEditorClass(TextAreaEditor.class);
+    }
+}
+==================================================
+org/apache/jmeter/samplers/StandardSampleSender.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import java.net.ConnectException;
+import java.rmi.RemoteException;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.jorphan.util.JMeterError;
+import org.apache.log.Logger;
+public class StandardSampleSender implements SampleSender , Serializable {...}
+==================================================
+org/apache/jmeter/control/SwitchController.java
+package org.apache.jmeter.control;
+import java.io.Serializable;
+import java.util.Iterator;
+import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.property.StringProperty;
+public class SwitchController extends GenericController implements Serializable {
+    private static final long serialVersionUID = 240L;
+    static final String SWITCH_VALUE = "SwitchController.value"; 
+    public SwitchController() {
+        super();
+    }
+    @Override
+    public Sampler next() {
+        if (isFirst()) {
+            current = getSelectionAsInt();
+        }
+        return super.next();
+    }
+    @Override
+    protected void incrementCurrent() {
+        current = Integer.MAX_VALUE;
+    }
+    public void setSelection(String inputValue) {
+        setProperty(new StringProperty(SWITCH_VALUE, inputValue));
+    }
+    private int getSelectionAsInt() {
+        int ret;
+        getProperty(SWITCH_VALUE).recoverRunningVersion(null);
+        String sel = getSelection();
+        try {
+            ret = Integer.parseInt(sel);
+            if ((ret < 0) || (ret >= getSubControllers().size())) {
+                ret = 0;
+            }
+        } catch (NumberFormatException e) {
+            if (sel.length() == 0) {
+                ret = 0;
+            } else {
+                ret = scanControllerNames(sel);
+            }
+        }
+        return ret;
+    }
+    private int scanControllerNames(String sel) {
+        Iterator<TestElement> iter = getSubControllers().iterator();
+        int i = 0;
+        int default_pos = Integer.MAX_VALUE;
+        while (iter.hasNext()) {
+            TestElement el = iter.next();
+            String name = el.getName();
+            if (name.equals(sel)) {
+                return i;
+            }
+            if (name.equalsIgnoreCase("default")) {
+                default_pos = i;
+            }
+            i++;
+        } 
+        return default_pos;
+    }
+    public String getSelection() {
+        return getPropertyAsString(SWITCH_VALUE);
+    }
+}
+==================================================
+org/apache/jmeter/protocol/smtp/sampler/SmtpSampler.java
+package org.apache.jmeter.protocol.smtp.sampler;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.List;
+import org.apache.jmeter.protocol.smtp.sampler.gui.SecuritySettingsPanel;
+import org.apache.jmeter.protocol.smtp.sampler.protocol.SendMailCommand;
+import org.apache.jmeter.protocol.smtp.sampler.tools.CounterOutputStream;
+import org.apache.jmeter.samplers.AbstractSampler;
+import org.apache.jmeter.samplers.Entry;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.services.FileServer;
+import org.apache.jmeter.testelement.property.CollectionProperty;
+import org.apache.jorphan.logging.LoggingManager;
+import javax.mail.AuthenticationFailedException;
+import javax.mail.BodyPart;
+import javax.mail.Header;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Multipart;
+import javax.mail.internet.AddressException;
+import javax.mail.internet.ContentType;
+import javax.mail.internet.InternetAddress;
+import org.apache.log.Logger;
+public class SmtpSampler extends AbstractSampler {...}
+==================================================
+org/apache/jmeter/threads/AbstractThreadGroup.java
+package org.apache.jmeter.threads;
+import java.io.Serializable;
+import org.apache.jmeter.control.Controller;
+import org.apache.jmeter.control.LoopController;
+import org.apache.jmeter.engine.event.LoopIterationListener;
+import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.property.IntegerProperty;
+import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.TestElementProperty;
+public abstract class AbstractThreadGroup extends AbstractTestElement implements Serializable , Controller {...}
+==================================================
+org/apache/jmeter/protocol/http/util/accesslog/SharedTCLogParser.java
+package org.apache.jmeter.protocol.http.util.accesslog;
+import java.io.IOException;
+import org.apache.jmeter.services.FileServer;
+import org.apache.jmeter.testelement.TestCloneable;
+import org.apache.jmeter.testelement.TestElement;
+public class SharedTCLogParser extends TCLogParser implements TestCloneable {
+    public SharedTCLogParser() {
+        super();
+    }
+    public SharedTCLogParser(String source) {
+        super(source);
+    }
+    @Override
+    public Object clone() {
+        SharedTCLogParser parser = new SharedTCLogParser();
+        parser.FILENAME = FILENAME;
+        parser.FILTER = FILTER;
+        return parser;
+    }
+    @Override
+    public int parse(TestElement el, int parseCount) {
+        FileServer fileServer = FileServer.getFileServer();
+        fileServer.reserveFile(FILENAME);
+        try {
+            return parse(fileServer, el, parseCount);
+        } catch (Exception exception) {
+            log.error("Problem creating samples", exception);
+        }
+        return -1; 
+    }
+    protected int parse(FileServer breader, TestElement el, int parseCount) {
+        int actualCount = 0;
+        String line = null;
+        try {
+            line = breader.readLine(FILENAME);
+            while (line != null) {
+                if (line.length() > 0) {
+                    actualCount += this.parseLine(line, el);
+                }
+                if ((parseCount != (-1)) && (actualCount >= parseCount)) {
+                    break;
+                }
+                line = breader.readLine(FILENAME);
+            } 
+            if (line == null) {
+                breader.closeFile(FILENAME);
+            }
+        } catch (IOException ioe) {
+            log.error("Error reading log file", ioe);
+        }
+        return actualCount;
+    }
+    @Override
+    public void close() {
+        try {
+            FileServer.getFileServer().closeFile(FILENAME);
+        } catch (IOException e) {
+        }
+    }
+}
+==================================================
+org/apache/jmeter/gui/action/Close.java
+package org.apache.jmeter.gui.action;
+import java.awt.event.ActionEvent;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.JOptionPane;
+import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.util.JMeterUtils;
+public class Close implements Command {
+    private static final Set<String> commands = new HashSet<String>();
+    static {
+        commands.add(ActionNames.CLOSE);
+    }
+    public Close() {
+    }
+    public Set<String> getActionNames() {
+        return commands;
+    }
+    public void doAction(ActionEvent e) {
+        performAction(e);
+    }
+    static boolean performAction(ActionEvent e) {
+        ActionRouter.getInstance().doActionNow(new ActionEvent(e.getSource(), e.getID(), ActionNames.CHECK_DIRTY));
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        if (guiPackage.isDirty()) {
+            int response;
+            if ((response =  
+            JOptionPane.showConfirmDialog(GuiPackage.getInstance().getMainFrame(), JMeterUtils.getResString("cancel_new_to_save"), JMeterUtils.getResString("save?"), JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE)) == JOptionPane.YES_OPTION) {
+                ActionRouter.getInstance().doActionNow(new ActionEvent(e.getSource(), e.getID(), ActionNames.SAVE));
+            }
+            if ((response == JOptionPane.CLOSED_OPTION) || (response == JOptionPane.CANCEL_OPTION)) {
+                return false; 
+            }
+        }
+        ActionRouter.getInstance().doActionNow(new ActionEvent(e.getSource(), e.getID(), ActionNames.STOP_THREAD));
+        closeProject(e);
+        return true;
+    }
+    static void closeProject(ActionEvent e) {
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        guiPackage.clearTestPlan();
+        guiPackage.getTreeListener().getJTree().setSelectionRow(1);
+        ActionRouter.getInstance().actionPerformed(new ActionEvent(e.getSource(), e.getID(), ActionNames.ADD_ALL));
+    }
+}
+==================================================
+org/apache/jmeter/testelement/AbstractTestElement.java
+package org.apache.jmeter.testelement;
+import java.io.Serializable;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.CollectionProperty;
+import org.apache.jmeter.testelement.property.IntegerProperty;
+import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.MapProperty;
+import org.apache.jmeter.testelement.property.MultiProperty;
+import org.apache.jmeter.testelement.property.NullProperty;
+import org.apache.jmeter.testelement.property.PropertyIterator;
+import org.apache.jmeter.testelement.property.PropertyIteratorImpl;
+import org.apache.jmeter.testelement.property.StringProperty;
+import org.apache.jmeter.testelement.property.TestElementProperty;
+import org.apache.jmeter.threads.JMeterContext;
+import org.apache.jmeter.threads.JMeterContextService;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public abstract class AbstractTestElement implements TestElement , Serializable {...}
+==================================================
+org/apache/jmeter/samplers/RemoteSampleListener.java
+package org.apache.jmeter.samplers;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+import java.util.List;
+public interface RemoteSampleListener extends Remote {
+    public void testStarted() throws RemoteException;
+    public void testStarted(String host) throws RemoteException;
+    public void testEnded() throws RemoteException;
+    public void testEnded(String host) throws RemoteException;
+    public void processBatch(List<SampleEvent> samples) throws RemoteException;
+    public void sampleOccurred(SampleEvent e) throws RemoteException;
+    public void sampleStarted(SampleEvent e) throws RemoteException;
+    public void sampleStopped(SampleEvent e) throws RemoteException;
+}
+==================================================
+org/apache/jorphan/reflect/ClassTools.java
+package org.apache.jorphan.reflect;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import org.apache.jorphan.util.JMeterException;
+import org.apache.commons.lang.ClassUtils;
+public class ClassTools {
+    public static Object construct(String className) throws JMeterException {
+        Object instance = null;
+        try {
+            instance = ClassUtils.getClass(className).newInstance();
+        } catch (ClassNotFoundException e) {
+            throw new JMeterException(e);
+        } catch (InstantiationException e) {
+            throw new JMeterException(e);
+        } catch (IllegalAccessException e) {
+            throw new JMeterException(e);
+        }
+        return instance;
+    }
+    public static Object construct(String className, int parameter) throws JMeterException {
+        Object instance = null;
+        try {
+            Class<?> clazz = ClassUtils.getClass(className);
+            clazz.getConstructor(new Class[]{ Integer.TYPE });
+            instance = ClassUtils.getClass(className).newInstance();
+        } catch (ClassNotFoundException e) {
+            throw new JMeterException(e);
+        } catch (InstantiationException e) {
+            throw new JMeterException(e);
+        } catch (IllegalAccessException e) {
+            throw new JMeterException(e);
+        } catch (SecurityException e) {
+            throw new JMeterException(e);
+        } catch (NoSuchMethodException e) {
+            throw new JMeterException(e);
+        }
+        return instance;
+    }
+    public static void invoke(Object instance, String methodName) throws SecurityException, IllegalArgumentException, JMeterException {
+        Method m;
+        try {
+            m = ClassUtils.getPublicMethod(instance.getClass(), methodName, new Class[]{  });
+            m.invoke(instance, ((Object[]) (null)));
+        } catch (NoSuchMethodException e) {
+            throw new JMeterException(e);
+        } catch (IllegalAccessException e) {
+            throw new JMeterException(e);
+        } catch (InvocationTargetException e) {
+            throw new JMeterException(e);
+        }
+    }
+}
+==================================================
+org/apache/jmeter/examples/sampler/ExampleSampler.java
+package org.apache.jmeter.examples.sampler;
+import org.apache.jmeter.samplers.AbstractSampler;
+import org.apache.jmeter.samplers.Entry;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class ExampleSampler extends AbstractSampler {
+    private static final long serialVersionUID = 240L;
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    public static final String DATA = "ExampleSampler.data"; 
+    private static int classCount = 0; 
+    public ExampleSampler() {
+        classCount++;
+        trace("ExampleSampler()");
+    }
+    public SampleResult sample(Entry e) {
+        trace("sample()");
+        SampleResult res = new SampleResult();
+        boolean isOK = false; 
+        String data = getData(); 
+        String response = null;
+        res.setSampleLabel(getTitle());
+        res.sampleStart(); 
+        try {
+            response = Thread.currentThread().getName();
+            res.setSamplerData(data);
+            res.setResponseData(response, null);
+            res.setDataType(SampleResult.TEXT);
+            res.setResponseCodeOK();
+            res.setResponseMessage("OK"); 
+            isOK = true;
+        } catch (Exception ex) {
+            log.debug("", ex);
+            res.setResponseCode("500"); 
+            res.setResponseMessage(ex.toString());
+        }
+        res.sampleEnd(); 
+        res.setSuccessful(isOK);
+        return res;
+    }
+    private String getTitle() {
+        return this.getName();
+    }
+    public String getData() {
+        return getPropertyAsString(DATA);
+    }
+    private void trace(String s) {
+        String tl = getTitle();
+        String tn = Thread.currentThread().getName();
+        String th = this.toString();
+        log.debug((((((((tn + " (") + classCount) + ") ") + tl) + " ") + s) + " ") + th);
+    }
+}
+==================================================
+org/apache/jmeter/functions/EvalVarFunction.java
+package org.apache.jmeter.functions;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import org.apache.jmeter.engine.util.CompoundVariable;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.threads.JMeterVariables;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class EvalVarFunction extends AbstractFunction {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final List<String> desc = new LinkedList<String>();
+    private static final String KEY = "__evalVar"; 
+    private static final int MIN_PARAMETER_COUNT = 1;
+    private static final int MAX_PARAMETER_COUNT = 1;
+    static {
+        desc.add(JMeterUtils.getResString("evalvar_name_param")); 
+    }
+    private Object[] values;
+    public EvalVarFunction() {
+    }
+    @Override
+    public synchronized String execute(SampleResult previousResult, Sampler currentSampler) throws InvalidVariableException {
+        String variableName = ((CompoundVariable) (values[0])).execute();
+        final JMeterVariables vars = getVariables();
+        if (vars == null) {
+            log.error("Variables have not yet been defined");
+            return "**ERROR - see log file**";
+        }
+        String variableValue = vars.get(variableName);
+        CompoundVariable cv = new CompoundVariable(variableValue);
+        return cv.execute();
+    }
+    @Override
+    public synchronized void setParameters(Collection<CompoundVariable> parameters) throws InvalidVariableException {
+        checkParameterCount(parameters, MIN_PARAMETER_COUNT, MAX_PARAMETER_COUNT);
+        values = parameters.toArray();
+    }
+    @Override
+    public String getReferenceKey() {
+        return KEY;
+    }
+    public List<String> getArgumentDesc() {
+        return desc;
+    }
+}
+==================================================
+org/apache/jmeter/threads/ThreadGroup.java
+package org.apache.jmeter.threads;
+import org.apache.jmeter.testelement.property.BooleanProperty;
+import org.apache.jmeter.testelement.property.IntegerProperty;
+import org.apache.jmeter.testelement.property.LongProperty;
+public class ThreadGroup extends AbstractThreadGroup {...}
+==================================================
+org/apache/jmeter/testelement/property/TestElementProperty.java
+package org.apache.jmeter.testelement.property;
+import org.apache.jmeter.protocol.mail.sampler.MailReaderSampler;
+import org.apache.jmeter.testelement.TestElement;
+public class TestElementProperty extends MultiProperty {
+    private static final long serialVersionUID = 233L;
+    private TestElement value = new MailReaderSampler();
+    private transient TestElement savedValue = null;
+    public TestElementProperty(String name, TestElement value) {
+        super(name);
+        this.value = value;
+    }
+    public TestElementProperty() {
+        super();
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (o instanceof TestElementProperty) {
+            if (this == o) {
+                return true;
+            }
+            if (value != null) {
+                return value.equals(((JMeterProperty) (o)).getObjectValue());
+            }
+        }
+        return false;
+    }
+    @Override
+    public int hashCode() {
+        return value == null ? 0 : value.hashCode();
+    }
+    public String getStringValue() {
+        return value.toString();
+    }
+    public void setObjectValue(Object v) {
+        if (v instanceof TestElement) {
+            value = ((TestElement) (v));
+        }
+    }
+    public Object getObjectValue() {
+        return value;
+    }
+    public TestElement getElement() {
+        return value;
+    }
+    @Override
+    public Object clone() {
+        TestElementProperty prop = ((TestElementProperty) (super.clone()));
+        prop.value = ((TestElement) (value.clone()));
+        return prop;
+    }
+    @Override
+    public void mergeIn(JMeterProperty prop) {
+        if (isEqualType(prop)) {
+            value.addTestElement(((TestElement) (prop.getObjectValue())));
+        }
+    }
+    public void recoverRunningVersion(TestElement owner) {
+        if (savedValue != null) {
+            value = savedValue;
+        }
+        value.recoverRunningVersion();
+    }
+    @Override
+    public void setRunningVersion(boolean runningVersion) {
+        super.setRunningVersion(runningVersion);
+        value.setRunningVersion(runningVersion);
+        if (runningVersion) {
+            savedValue = value;
+        } else {
+            savedValue = null;
+        }
+    }
+    @Override
+    public void addProperty(JMeterProperty prop) {
+        value.setProperty(prop);
+    }
+    @Override
+    public void clear() {
+        value.clear();
+    }
+    @Override
+    public PropertyIterator iterator() {
+        return value.propertyIterator();
+    }
+}
+==================================================
+org/apache/jmeter/control/TransactionSampler.java
+package org.apache.jmeter.control;
+import org.apache.jmeter.protocol.smtp.sampler.SmtpSampler;
+import org.apache.jmeter.samplers.AbstractSampler;
+import org.apache.jmeter.samplers.Entry;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.samplers.Sampler;
+public class TransactionSampler extends AbstractSampler {
+    private static final long serialVersionUID = 240L;
+    private boolean transactionDone = false;
+    private TransactionController transactionController;
+    private Sampler subSampler = new SmtpSampler();
+    private SampleResult transactionSampleResult;
+    private int calls = 0;
+    private int noFailingSamples = 0;
+    private int totalTime = 0;
+    @Deprecated
+    public TransactionSampler() {
+    }
+    public TransactionSampler(TransactionController controller, String name) {
+        transactionController = controller;
+        setName(name); 
+        transactionSampleResult = new SampleResult();
+        transactionSampleResult.setSampleLabel(name);
+        transactionSampleResult.setSuccessful(true);
+        transactionSampleResult.sampleStart();
+    }
+    public SampleResult sample(Entry e) {
+        throw new RuntimeException("Cannot sample TransactionSampler directly");
+    }
+    public Sampler getSubSampler() {
+        return subSampler;
+    }
+    public SampleResult getTransactionResult() {
+        return transactionSampleResult;
+    }
+    public TransactionController getTransactionController() {
+        return transactionController;
+    }
+    public boolean isTransactionDone() {
+        return transactionDone;
+    }
+    public void addSubSamplerResult(SampleResult res) {
+        calls++;
+        if (!res.isSuccessful()) {
+            transactionSampleResult.setSuccessful(false);
+            noFailingSamples++;
+        }
+        transactionSampleResult.addSubResult(res);
+        totalTime += res.getTime();
+    }
+    protected void setTransactionDone() {
+        this.transactionDone = true;
+        transactionSampleResult.setResponseMessage((("Number of samples in transaction : " + calls) + ", number of failing samples : ") + noFailingSamples);
+        if (transactionSampleResult.isSuccessful()) {
+            transactionSampleResult.setResponseCodeOK();
+        }
+        if (!transactionController.isIncludeTimers()) {
+            long end = transactionSampleResult.currentTimeInMillis();
+            transactionSampleResult.setIdleTime((end - transactionSampleResult.getStartTime()) - totalTime);
+            transactionSampleResult.setEndTime(end);
+        }
+    }
+}
+==================================================
+org/apache/jmeter/protocol/jms/sampler/FixedQueueExecutor.java
+package org.apache.jmeter.protocol.jms.sampler;
+import org.apache.jorphan.logging.LoggingManager;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageProducer;
+import org.apache.log.Logger;
+public class FixedQueueExecutor implements QueueExecutor {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private final MessageProducer producer;
+    private final int timeout;
+    private final boolean useReqMsgIdAsCorrelId;
+    public FixedQueueExecutor(MessageProducer producer, int timeout, boolean useReqMsgIdAsCorrelId) {
+        this.producer = producer;
+        this.timeout = timeout;
+        this.useReqMsgIdAsCorrelId = useReqMsgIdAsCorrelId;
+    }
+    public Message sendAndReceive(Message request) throws JMSException {
+        String id = request.getJMSCorrelationID();
+        if ((id == null) && (!useReqMsgIdAsCorrelId)) {
+            throw new IllegalArgumentException("Correlation id is null. Set the JMSCorrelationID header.");
+        }
+        final MessageAdmin admin = MessageAdmin.getAdmin();
+        if (useReqMsgIdAsCorrelId) {
+            synchronized(admin) {
+                producer.send(request);
+                id = request.getJMSMessageID();
+                admin.putRequest(id, request);
+            }
+        } else {
+            admin.putRequest(id, request);
+            producer.send(request);
+        }
+        try {
+            if (log.isDebugEnabled()) {
+                log.debug((("wait for reply " + id) + " started on ") + System.currentTimeMillis());
+            }
+            synchronized(request) {
+                request.wait(timeout);
+            }
+            if (log.isDebugEnabled()) {
+                log.debug((("done waiting for " + id) + " ended on ") + System.currentTimeMillis());
+            }
+        } catch (InterruptedException e) {
+            log.warn("Interrupt exception caught", e);
+        }
+        return admin.get(id);
+    }
+}
+==================================================
+org/apache/jmeter/protocol/ldap/config/gui/LDAPArgument.java
+package org.apache.jmeter.protocol.ldap.config.gui;
+import java.io.Serializable;
+import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.property.StringProperty;
+public class LDAPArgument extends AbstractTestElement implements Serializable {
+    private static final long serialVersionUID = 240L;
+    private static final String ARG_NAME = "Argument.name"; 
+    private static final String VALUE = "Argument.value"; 
+    private static final String OPCODE = "Argument.opcode"; 
+    private static final String METADATA = "Argument.metadata"; 
+    public LDAPArgument() {
+    }
+    public LDAPArgument(String name, String value, String opcode) {
+        setProperty(new StringProperty(ARG_NAME, name));
+        setProperty(new StringProperty(VALUE, value));
+        setProperty(new StringProperty(OPCODE, opcode));
+    }
+    public LDAPArgument(String name, String value, String opcode, String metadata) {
+        setProperty(new StringProperty(ARG_NAME, name));
+        setProperty(new StringProperty(VALUE, value));
+        setProperty(new StringProperty(OPCODE, opcode));
+        setProperty(new StringProperty(METADATA, metadata));
+    }
+    @Override
+    public void setName(String newName) {
+        setProperty(new StringProperty(ARG_NAME, newName));
+    }
+    @Override
+    public String getName() {
+        return getPropertyAsString(ARG_NAME);
+    }
+    public void setValue(String newValue) {
+        setProperty(new StringProperty(VALUE, newValue));
+    }
+    public String getValue() {
+        return getPropertyAsString(VALUE);
+    }
+    public void setOpcode(String newOpcode) {
+        setProperty(new StringProperty(OPCODE, newOpcode));
+    }
+    public String getOpcode() {
+        return getPropertyAsString(OPCODE);
+    }
+    public void setMetaData(String newMetaData) {
+        setProperty(new StringProperty(METADATA, newMetaData));
+    }
+    public String getMetaData() {
+        return getPropertyAsString(METADATA);
+    }
+}
+==================================================
+org/apache/jmeter/functions/SetProperty.java
+package org.apache.jmeter.functions;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import org.apache.jmeter.engine.util.CompoundVariable;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.util.JMeterUtils;
+public class SetProperty extends AbstractFunction {
+    private static final List<String> desc = new LinkedList<String>();
+    private static final String KEY = "__setProperty"; 
+    private static final int MIN_PARAMETER_COUNT = 2;
+    private static final int MAX_PARAMETER_COUNT = 3;
+    static {
+        desc.add(JMeterUtils.getResString("property_name_param")); 
+        desc.add(JMeterUtils.getResString("property_value_param")); 
+        desc.add(JMeterUtils.getResString("property_returnvalue_param")); 
+    }
+    private Object[] values;
+    public SetProperty() {
+    }
+    @Override
+    public synchronized String execute(SampleResult previousResult, Sampler currentSampler) throws InvalidVariableException {
+        String propertyName = ((CompoundVariable) (values[0])).execute();
+        String propertyValue = ((CompoundVariable) (values[1])).execute();
+        boolean returnValue = false; 
+        if (values.length > 2) {
+            returnValue = ((CompoundVariable) (values[2])).execute().equalsIgnoreCase("true"); 
+        }
+        if (returnValue) {
+            return ((String) (JMeterUtils.setProperty(propertyName, propertyValue)));
+        } else {
+            JMeterUtils.setProperty(propertyName, propertyValue);
+            return "";
+        }
+    }
+    @Override
+    public synchronized void setParameters(Collection<CompoundVariable> parameters) throws InvalidVariableException {
+        checkParameterCount(parameters, MIN_PARAMETER_COUNT, MAX_PARAMETER_COUNT);
+        values = parameters.toArray();
+    }
+    @Override
+    public String getReferenceKey() {
+        return KEY;
+    }
+    public List<String> getArgumentDesc() {
+        return desc;
+    }
+}
+==================================================
+org/apache/jmeter/control/gui/SwitchControllerGui.java
+package org.apache.jmeter.control.gui;
+import java.awt.BorderLayout;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import org.apache.jmeter.control.SwitchController;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.util.JMeterUtils;
+public class SwitchControllerGui extends AbstractControllerGui {
+    private static final long serialVersionUID = 240L;
+    private static final String SWITCH_LABEL = "switch_controller_label"; 
+    private JTextField switchValue;
+    public SwitchControllerGui() {
+        init();
+    }
+    public TestElement createTestElement() {
+        SwitchController ic = new SwitchController();
+        modifyTestElement(ic);
+        return ic;
+    }
+    public void modifyTestElement(TestElement ic) {
+        configureTestElement(ic);
+        ((SwitchController) (ic)).setSelection(switchValue.getText());
+    }
+    @Override
+    public void clearGui() {
+        super.clearGui();
+        switchValue.setText(""); 
+    }
+    @Override
+    public void configure(TestElement el) {
+        super.configure(el);
+        switchValue.setText(((SwitchController) (el)).getSelection());
+    }
+    public String getLabelResource() {
+        return "switch_controller_title"; 
+    }
+    private void init() {
+        setLayout(new BorderLayout(0, 5));
+        setBorder(makeBorder());
+        add(makeTitlePanel(), BorderLayout.NORTH);
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.add(createSwitchPanel(), BorderLayout.NORTH);
+        add(mainPanel, BorderLayout.CENTER);
+    }
+    private JPanel createSwitchPanel() {
+        JPanel switchPanel = new JPanel(new BorderLayout(5, 0));
+        JLabel selectionLabel = new JLabel(JMeterUtils.getResString(SWITCH_LABEL));
+        switchValue = new JTextField(""); 
+        selectionLabel.setLabelFor(switchValue);
+        switchPanel.add(selectionLabel, BorderLayout.WEST);
+        switchPanel.add(switchValue, BorderLayout.CENTER);
+        return switchPanel;
+    }
+}
+==================================================
+org/apache/jmeter/samplers/RemoteSampleListenerImpl.java
+package org.apache.jmeter.samplers;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.List;
+import org.apache.jmeter.engine.event.LoopIterationEvent;
+import org.apache.jmeter.testelement.TestListener;
+public class RemoteSampleListenerImpl extends UnicastRemoteObject implements RemoteSampleListener , SampleListener , TestListener {...}
+==================================================
+org/apache/jmeter/testelement/TestElement.java
+package org.apache.jmeter.testelement;
+import org.apache.jmeter.testelement.property.JMeterProperty;
+import org.apache.jmeter.testelement.property.PropertyIterator;
+import org.apache.jmeter.threads.JMeterContext;
+public interface TestElement extends Cloneable {
+    public static final String NAME = "TestElement.name"; 
+    public static final String GUI_CLASS = "TestElement.gui_class"; 
+    public static final String ENABLED = "TestElement.enabled"; 
+    public static final String TEST_CLASS = "TestElement.test_class"; 
+    public static final String COMMENTS = "TestPlan.comments"; 
+    public void addTestElement(TestElement child);
+    public void clearTestElementChildren();
+    public void setProperty(String key, String value);
+    public void setProperty(String key, String value, String dflt);
+    public void setProperty(String key, boolean value);
+    public void setProperty(String key, boolean value, boolean dflt);
+    public void setProperty(String key, int value);
+    public void setProperty(String key, int value, int dflt);
+    public boolean isEnabled();
+    public boolean isRunningVersion();
+    public boolean isTemporary(JMeterProperty property);
+    public void setTemporary(JMeterProperty property);
+    public boolean getPropertyAsBoolean(String key);
+    public boolean getPropertyAsBoolean(String key, boolean defaultValue);
+    public long getPropertyAsLong(String key);
+    public long getPropertyAsLong(String key, long defaultValue);
+    public int getPropertyAsInt(String key);
+    public int getPropertyAsInt(String key, int defaultValue);
+    public float getPropertyAsFloat(String key);
+    public double getPropertyAsDouble(String key);
+    public void setRunningVersion(boolean run);
+    public void recoverRunningVersion();
+    public void clear();
+    public String getPropertyAsString(String key);
+    public String getPropertyAsString(String key, String defaultValue);
+    public void setProperty(JMeterProperty property);
+    public JMeterProperty getProperty(String propName);
+    public PropertyIterator propertyIterator();
+    public void removeProperty(String key);
+    public Object clone();
+    public void traverse(TestElementTraverser traverser);
+    public JMeterContext getThreadContext();
+    public void setThreadContext(JMeterContext threadContext);
+    public String getThreadName();
+    public void setThreadName(String threadName);
+    public boolean canRemove();
+    public String getName();
+    public void setName(String name);
+    public String getComment();
+    public void setComment(String comment);
+}
+==================================================
+org/apache/jmeter/testelement/property/IntegerProperty.java
+package org.apache.jmeter.testelement.property;
+import org.apache.jmeter.testelement.TestElement;
+public class IntegerProperty extends NumberProperty {
+    private static final long serialVersionUID = 240L;
+    private int value;
+    private int savedValue;
+    public IntegerProperty(String name, int value) {
+        super(name);
+        this.value = value;
+    }
+    @Override
+    public void setRunningVersion(boolean runningVersion) {
+        savedValue = value;
+        super.setRunningVersion(runningVersion);
+    }
+    public void recoverRunningVersion(TestElement owner) {
+        value = savedValue;
+    }
+    public IntegerProperty(String name) {
+        super(name);
+    }
+    public IntegerProperty() {
+        super();
+    }
+    public void setValue(int value) {
+        this.value = value;
+    }
+    @Override
+    protected void setNumberValue(Number n) {
+        value = n.intValue();
+    }
+    @Override
+    protected void setNumberValue(String n) throws NumberFormatException {
+        value = Integer.parseInt(n);
+    }
+    public String getStringValue() {
+        return Integer.toString(value);
+    }
+    public Object getObjectValue() {
+        return Integer.valueOf(value);
+    }
+    @Override
+    public Object clone() {
+        IntegerProperty prop = ((IntegerProperty) (super.clone()));
+        prop.value = value;
+        return prop;
+    }
+    @Override
+    public boolean getBooleanValue() {
+        return getIntValue() > 0 ? true : false;
+    }
+    @Override
+    public double getDoubleValue() {
+        return value;
+    }
+    @Override
+    public float getFloatValue() {
+        return value;
+    }
+    @Override
+    public int getIntValue() {
+        return value;
+    }
+    @Override
+    public long getLongValue() {
+        return value;
+    }
+}
+==================================================
+org/apache/jmeter/visualizers/RequestViewRaw.java
+package org.apache.jmeter.visualizers;
+import java.awt.BorderLayout;
+import javax.swing.JPanel;
+import javax.swing.JTextArea;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jorphan.gui.GuiUtils;
+public class RequestViewRaw implements RequestView {
+    static final String KEY_LABEL = "view_results_table_request_tab_raw"; 
+    private JTextArea sampleDataField;
+    private JPanel paneRaw;
+    public void init() {
+        paneRaw = new JPanel(new BorderLayout(0, 5));
+        sampleDataField = new JTextArea();
+        sampleDataField.setEditable(false);
+        sampleDataField.setLineWrap(true);
+        sampleDataField.setWrapStyleWord(true);
+        paneRaw.add(GuiUtils.makeScrollPane(sampleDataField));
+    }
+    public void clearData() {
+        sampleDataField.setText(""); 
+    }
+    public void setSamplerResult(Object objectResult) {
+        if (objectResult instanceof SampleResult) {
+            SampleResult sampleResult = ((SampleResult) (objectResult));
+            String sd = sampleResult.getSamplerData();
+            if (sd != null) {
+                String rh = sampleResult.getRequestHeaders();
+                if ((rh != null) && (rh.length() > 0)) {
+                    StringBuilder sb = new StringBuilder((sd.length() + rh.length()) + 20);
+                    sb.append(sd);
+                    sb.append("\n"); 
+                    sb.append(JMeterUtils.getResString("view_results_request_headers")); 
+                    sb.append("\n"); 
+                    sb.append(rh);
+                    sd = sb.toString();
+                }
+                sampleDataField.setText(sd);
+            } else {
+                sampleDataField.setText(JMeterUtils.getResString("view_results_table_request_raw_nodata")); 
+            }
+        }
+    }
+    public JPanel getPanel() {
+        return paneRaw;
+    }
+    public String getLabel() {
+        return JMeterUtils.getResString(KEY_LABEL);
+    }
+}
+==================================================
+org/apache/jmeter/samplers/AbstractSampler.java
+package org.apache.jmeter.samplers;
+import org.apache.jmeter.testelement.AbstractTestElement;
+public abstract class AbstractSampler extends AbstractTestElement implements Sampler {...}
+==================================================
+org/apache/jmeter/util/keystore/DefaultKeyStore.java
+package org.apache.jmeter.util.keystore;
+import java.io.InputStream;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.Enumeration;
+public class DefaultKeyStore extends JmeterKeyStore {
+    private X509Certificate[] certChain;
+    private PrivateKey key;
+    private String alias;
+    private final KeyStore store;
+    public DefaultKeyStore(String type) throws Exception {
+        this.store = KeyStore.getInstance(type);
+    }
+    @Override
+    public void load(InputStream is, String pword) throws Exception {
+        store.load(is, pword.toCharArray());
+        PrivateKey _key = null;
+        X509Certificate[] _certChain = null;
+        if (null != is) {
+            Enumeration<String> aliases = store.aliases();
+            while (aliases.hasMoreElements()) {
+                this.alias = aliases.nextElement();
+                if (store.isKeyEntry(alias)) {
+                    _key = ((PrivateKey) (store.getKey(alias, pword.toCharArray())));
+                    Certificate[] chain = store.getCertificateChain(alias);
+                    _certChain = new X509Certificate[chain.length];
+                    for (int i = 0; i < chain.length; i++) {
+                        _certChain[i] = ((X509Certificate) (chain[i]));
+                    }
+                    break;
+                }
+            } 
+            if (null == _key) {
+                throw new Exception("No key found");
+            }
+            if (null == _certChain) {
+                throw new Exception("No certificate chain found");
+            }
+        }
+        this.key = _key;
+        this.certChain = _certChain;
+    }
+    @Override
+    public final X509Certificate[] getCertificateChain() {
+        return this.certChain;
+    }
+    @Override
+    public final PrivateKey getPrivateKey() {
+        return this.key;
+    }
+    @Override
+    public final String getAlias() {
+        return this.alias;
+    }
+}
+==================================================
+org/apache/jmeter/gui/action/EnableComponent.java
+package org.apache.jmeter.gui.action;
+import java.awt.event.ActionEvent;
+import java.util.HashSet;
+import java.util.Set;
+import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class EnableComponent implements Command {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final Set<String> commands = new HashSet<String>();
+    static {
+        commands.add(ActionNames.ENABLE);
+        commands.add(ActionNames.DISABLE);
+        commands.add(ActionNames.TOGGLE);
+    }
+    public void doAction(ActionEvent e) {
+        JMeterTreeNode[] nodes = GuiPackage.getInstance().getTreeListener().getSelectedNodes();
+        if (e.getActionCommand().equals(ActionNames.ENABLE)) {
+            log.debug("enabling currently selected gui objects");
+            enableComponents(nodes, true);
+        } else if (e.getActionCommand().equals(ActionNames.DISABLE)) {
+            log.debug("disabling currently selected gui objects");
+            enableComponents(nodes, false);
+        } else if (e.getActionCommand().equals(ActionNames.TOGGLE)) {
+            log.debug("toggling currently selected gui objects");
+            toggleComponents(nodes);
+        }
+    }
+    private void enableComponents(JMeterTreeNode[] nodes, boolean enable) {
+        GuiPackage pack = GuiPackage.getInstance();
+        for (int i = 0; i < nodes.length; i++) {
+            nodes[i].setEnabled(enable);
+            pack.getGui(nodes[i].getTestElement()).setEnabled(enable);
+        }
+    }
+    private void toggleComponents(JMeterTreeNode[] nodes) {
+        GuiPackage pack = GuiPackage.getInstance();
+        for (int i = 0; i < nodes.length; i++) {
+            boolean enable = !nodes[i].isEnabled();
+            nodes[i].setEnabled(enable);
+            pack.getGui(nodes[i].getTestElement()).setEnabled(enable);
+        }
+    }
+    public Set<String> getActionNames() {
+        return commands;
+    }
+}
+==================================================
+org/apache/jmeter/config/RandomVariableConfigBeanInfo.java
+package org.apache.jmeter.config;
+import java.beans.PropertyDescriptor;
+import org.apache.jmeter.testbeans.BeanInfoSupport;
+public class RandomVariableConfigBeanInfo extends BeanInfoSupport {
+    private static final String VARIABLE_GROUP = "variable"; 
+    private static final String OPTIONS_GROUP = "options"; 
+    private static final String RANDOM_GROUP = "random"; 
+    private static final String PER_THREAD = "perThread"; 
+    private static final String RANDOM_SEED = "randomSeed"; 
+    private static final String MAXIMUM_VALUE = "maximumValue"; 
+    private static final String MINIMUM_VALUE = "minimumValue"; 
+    private static final String OUTPUT_FORMAT = "outputFormat"; 
+    private static final String VARIABLE_NAME = "variableName"; 
+    public RandomVariableConfigBeanInfo() {
+        super(RandomVariableConfig.class);
+        PropertyDescriptor p;
+        createPropertyGroup(VARIABLE_GROUP, new String[]{ VARIABLE_NAME, OUTPUT_FORMAT });
+        p = property(VARIABLE_NAME);
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, ""); 
+        p = property(OUTPUT_FORMAT);
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, ""); 
+        createPropertyGroup(RANDOM_GROUP, new String[]{ MINIMUM_VALUE, MAXIMUM_VALUE, RANDOM_SEED });
+        p = property(MINIMUM_VALUE);
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, "1"); 
+        p = property(MAXIMUM_VALUE);
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, ""); 
+        p = property(RANDOM_SEED);
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(DEFAULT, ""); 
+        createPropertyGroup(OPTIONS_GROUP, new String[]{ PER_THREAD });
+        p = property(PER_THREAD);
+        p.setValue(NOT_UNDEFINED, Boolean.TRUE);
+        p.setValue(NOT_EXPRESSION, Boolean.TRUE);
+        p.setValue(NOT_OTHER, Boolean.TRUE);
+        p.setValue(DEFAULT, Boolean.FALSE);
+    }
+}
+==================================================
+org/apache/jmeter/config/Argument.java
+package org.apache.jmeter.config;
+import java.io.Serializable;
+import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.property.StringProperty;
+public class Argument extends AbstractTestElement implements Serializable {
+    private static final long serialVersionUID = 240L;
+    public static final String ARG_NAME = "Argument.name";
+    public static final String VALUE = "Argument.value";
+    public static final String METADATA = "Argument.metadata";
+    public Argument() {
+    }
+    public Argument(String name, String value) {
+        setProperty(new StringProperty(ARG_NAME, name));
+        setProperty(new StringProperty(VALUE, value));
+    }
+    public Argument(String name, String value, String metadata) {
+        setProperty(new StringProperty(ARG_NAME, name));
+        setProperty(new StringProperty(VALUE, value));
+        setProperty(new StringProperty(METADATA, metadata));
+    }
+    @Override
+    public void setName(String newName) {
+        setProperty(new StringProperty(ARG_NAME, newName));
+    }
+    @Override
+    public String getName() {
+        return getPropertyAsString(ARG_NAME);
+    }
+    public void setValue(String newValue) {
+        setProperty(new StringProperty(VALUE, newValue));
+    }
+    public String getValue() {
+        return getPropertyAsString(VALUE);
+    }
+    public void setMetaData(String newMetaData) {
+        setProperty(new StringProperty(METADATA, newMetaData));
+    }
+    public String getMetaData() {
+        return getPropertyAsString(METADATA);
+    }
+    @Override
+    public String toString() {
+        return (getName() + getMetaData()) + getValue();
+    }
+    public boolean isSkippable(String parameterName) {
+        if (parameterName.trim().length() == 0) {
+            return true; 
+        }
+        if (parameterName.trim().startsWith("${") && parameterName.endsWith("}")) {
+            return true; 
+        }
+        return false;
+    }
+}
+==================================================
+org/apache/jmeter/samplers/SampleSender.java
+package org.apache.jmeter.samplers;
+public interface SampleSender {
+    public void testEnded();
+    public void testEnded(String host);
+    public void sampleOccurred(SampleEvent e);
+}
+==================================================
+org/apache/jmeter/gui/action/AddToTree.java
+package org.apache.jmeter.gui.action;
+import java.awt.event.ActionEvent;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.JComponent;
+import javax.swing.tree.TreePath;
+import org.apache.jmeter.exceptions.IllegalUserActionException;
+import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.gui.tree.JMeterTreeNode;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class AddToTree implements Command {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final Set<String> commandSet;
+    static {
+        HashSet<String> commands = new HashSet<String>();
+        commands.add(ActionNames.ADD);
+        commandSet = Collections.unmodifiableSet(commands);
+    }
+    public AddToTree() {
+    }
+    public Set<String> getActionNames() {
+        return commandSet;
+    }
+    public void doAction(ActionEvent e) {
+        GuiPackage guiPackage = GuiPackage.getInstance();
+        try {
+            guiPackage.updateCurrentNode();
+            TestElement testElement = guiPackage.createTestElement(((JComponent) (e.getSource())).getName());
+            JMeterTreeNode parentNode = guiPackage.getCurrentNode();
+            JMeterTreeNode node = guiPackage.getTreeModel().addComponent(testElement, parentNode);
+            guiPackage.getMainFrame().getTree().setSelectionPath(new TreePath(node.getPath()));
+        } catch (IllegalUserActionException err) {
+            log.error("", err); 
+            String msg = err.getMessage();
+            if (msg == null) {
+                msg = err.toString();
+            }
+            JMeterUtils.reportErrorToUser(msg);
+        } catch (Exception err) {
+            log.error("", err); 
+            String msg = err.getMessage();
+            if (msg == null) {
+                msg = err.toString();
+            }
+            JMeterUtils.reportErrorToUser(msg);
+        }
+    }
+}
+==================================================
+org/apache/jmeter/samplers/AsynchSampleSender.java
+package org.apache.jmeter.samplers;
+import java.io.ObjectStreamException;
+import java.io.Serializable;
+import java.net.ConnectException;
+import java.rmi.RemoteException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.jorphan.util.JMeterError;
+import org.apache.log.Logger;
+public class AsynchSampleSender implements SampleSender , Serializable {
+    private static final long serialVersionUID = 251L;
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final transient SampleEvent FINAL_EVENT = new SampleEvent();
+    private static final int capacity = JMeterUtils.getPropDefault("asynch.batch.queue.size", 100); 
+    private final RemoteSampleListener listener = new RemoteSampleListenerImpl();
+    static {
+        log.info("Using Asynch Remote Sampler for this test run, queue size " + capacity);
+    }
+    private transient BlockingQueue<SampleEvent> queue; 
+    private transient long queueWaits; 
+    private transient long queueWaitTime; 
+    private Object readResolve() throws ObjectStreamException {
+        log.debug("Using batch queue size (asynch.batch.queue.size): " + capacity);
+        queue = new ArrayBlockingQueue<SampleEvent>(capacity);
+        Worker worker = new Worker(queue, listener);
+        worker.setDaemon(true);
+        worker.start();
+        return this;
+    }
+    @Deprecated
+    public AsynchSampleSender() {
+        log.warn("Constructor only intended for use in testing"); 
+        listener = null;
+    }
+    public void testEnded() {
+        log.debug("Test ended()");
+        try {
+            listener.testEnded();
+        } catch (RemoteException ex) {
+            log.warn("testEnded()" + ex);
+        }
+    }
+    public void testEnded(String host) {
+        log.debug("Test Ended on " + host);
+        try {
+            listener.testEnded(host);
+            queue.put(FINAL_EVENT);
+        } catch (Exception ex) {
+            log.warn("testEnded(host)" + ex);
+        }
+        if (queueWaits > 0) {
+            log.info(((("QueueWaits: " + queueWaits) + "; QueueWaitTime: ") + queueWaitTime) + " (nanoseconds)");
+        }
+    }
+    public void sampleOccurred(SampleEvent e) {
+        try {
+            if (!queue.offer(e)) {
+                queueWaits++;
+                long t1 = System.nanoTime();
+                queue.put(e);
+                long t2 = System.nanoTime();
+                queueWaitTime += t2 - t1;
+            }
+        } catch (Exception err) {
+            log.error("sampleOccurred; failed to queue the sample", err);
+        }
+    }
+    private static class Worker extends Thread {
+        private final BlockingQueue<SampleEvent> queue;
+        private final RemoteSampleListener listener = new RemoteSampleListenerImpl();
+        @Override
+        public void run() {
+            try {
+                boolean eof = false;
+                while (!eof) {
+                    List<SampleEvent> l = new ArrayList<SampleEvent>();
+                    SampleEvent e = queue.take();
+                    while ((!(eof = e == FINAL_EVENT)) && (e != null)) {
+                        l.add(e);
+                        e = queue.poll(); 
+                    } 
+                    int size = l.size();
+                    if (size > 0) {
+                        try {
+                            listener.processBatch(l);
+                        } catch (RemoteException err) {
+                            if (err.getCause() instanceof ConnectException) {
+                                throw new JMeterError("Could not return sample", err);
+                            }
+                            log.error("Failed to return sample", err);
+                        }
+                    }
+                } 
+            } catch (InterruptedException e) {
+            }
+            log.debug("Worker ended");
+        }
+        public Worker() {
+        }
+    }
+}
+==================================================
+org/apache/jmeter/samplers/Sampler.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import org.apache.jmeter.testelement.TestElement;
+public interface Sampler extends Serializable , TestElement {
+    public SampleResult sample(Entry e);
+}
+==================================================
+org/apache/jmeter/visualizers/GraphListener.java
+package org.apache.jmeter.visualizers;
+public interface GraphListener {
+    public void updateGui(Sample s);
+    public void updateGui();
+}
+==================================================
+org/apache/jmeter/visualizers/SplineModel.java
+package org.apache.jmeter.visualizers;
+import org.apache.jmeter.samplers.Clearable;
+import org.apache.jmeter.samplers.SampleResult;
+public class SplineModel implements Clearable {
+    public static final int DEFAULT_NUMBER_OF_NODES = 10;
+    public static final int DEFAULT_REFRESH_PERIOD = 1;
+    protected final boolean SHOW_INCOMING_SAMPLES = true;
+    protected int numberOfNodes = DEFAULT_NUMBER_OF_NODES;
+    protected int refreshPeriod = DEFAULT_REFRESH_PERIOD;
+    private Spline3 dataCurve = null;
+    final CachingStatCalculator samples;
+    private GraphListener listener = new SplineVisualizer();
+    private String name;
+    public SplineModel() {
+        samples = new CachingStatCalculator("Spline");
+    }
+    public synchronized void setName(String newName) {
+        name = newName;
+    }
+    public boolean isEditable() {
+        return true;
+    }
+    public synchronized Spline3 getDataCurve() {
+        return dataCurve;
+    }
+    public long getMinimum() {
+        return samples.getMin().longValue();
+    }
+    public long getMaximum() {
+        return samples.getMax().longValue();
+    }
+    public long getAverage() {
+        return ((long) (samples.getMean()));
+    }
+    public long getCurrent() {
+        return samples.getCurrentSample().getData();
+    }
+    public long getSample(int i) {
+        return samples.getSample(i).getData();
+    }
+    public long getNumberOfCollectedSamples() {
+        return samples.getCount();
+    }
+    public synchronized String getName() {
+        return name;
+    }
+    public void uncompile() {
+        clearData();
+    }
+    public synchronized void clearData() {
+        samples.clear();
+        this.dataCurve = null;
+        if (listener != null) {
+            listener.updateGui();
+        }
+    }
+    public synchronized void add(SampleResult sampleResult) {
+        samples.addSample(sampleResult);
+        long n = samples.getCount();
+        if ((n % (numberOfNodes * refreshPeriod)) == 0) {
+            float[] floatNode = new float[numberOfNodes];
+            long loadFactor = n / numberOfNodes;
+            for (int i = 0; i < numberOfNodes; i++) {
+                for (int j = 0; j < loadFactor; j++) {
+                    floatNode[i] += samples.getSample(((int) ((i * loadFactor) + j))).getData();
+                }
+                floatNode[i] = floatNode[i] / loadFactor;
+            }
+            dataCurve = new Spline3(floatNode);
+            if (listener != null) {
+                listener.updateGui();
+            }
+        } else {
+        }
+    }
+}
+==================================================
+org/apache/jorphan/util/XMLBuffer.java
+package org.apache.jorphan.util;
+import org.apache.commons.collections.ArrayStack;
+public class XMLBuffer {
+    private StringBuilder sb = new StringBuilder(); 
+    private ArrayStack tags = new ArrayStack(); 
+    public XMLBuffer() {
+    }
+    private void startTag(String t) {
+        sb.append("<");
+        sb.append(t);
+        sb.append(">");
+    }
+    private void endTag(String t) {
+        sb.append("</");
+        sb.append(t);
+        sb.append(">");
+        sb.append("\n");
+    }
+    private void emptyTag(String t) {
+        sb.append("<");
+        sb.append(t);
+        sb.append("/>");
+        sb.append("\n");
+    }
+    public XMLBuffer openTag(String tagname) {
+        tags.push(tagname);
+        startTag(tagname);
+        return this;
+    }
+    public XMLBuffer closeTag(String tagname) {
+        String tag = ((String) (tags.pop()));
+        if (!tag.equals(tagname)) {
+            throw new IllegalArgumentException((("Trying to close tag: " + tagname) + " ; should be ") + tag);
+        }
+        endTag(tag);
+        return this;
+    }
+    public XMLBuffer tag(String tagname, String content) {
+        if (content.length() == 0) {
+            emptyTag(tagname);
+        } else {
+            startTag(tagname);
+            sb.append(content);
+            endTag(tagname);
+        }
+        return this;
+    }
+    public XMLBuffer tag(String tagname, StringBuilder content) {
+        if (content.length() == 0) {
+            emptyTag(tagname);
+        } else {
+            startTag(tagname);
+            sb.append(content);
+            endTag(tagname);
+        }
+        return this;
+    }
+    @Override
+    public String toString() {
+        while (!tags.isEmpty()) {
+            endTag(((String) (tags.pop())));
+        } 
+        return sb.toString();
+    }
+}
+==================================================
+org/apache/jmeter/functions/IntSum.java
+package org.apache.jmeter.functions;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import org.apache.jmeter.engine.util.CompoundVariable;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.threads.JMeterVariables;
+import org.apache.jmeter.util.JMeterUtils;
+public class IntSum extends AbstractFunction {
+    private static final List<String> desc = new LinkedList<String>();
+    private static final String KEY = "__intSum"; 
+    static {
+        desc.add(JMeterUtils.getResString("intsum_param_1")); 
+        desc.add(JMeterUtils.getResString("intsum_param_2")); 
+        desc.add(JMeterUtils.getResString("function_name_paropt")); 
+    }
+    private Object[] values;
+    public IntSum() {
+    }
+    @Override
+    public synchronized String execute(SampleResult previousResult, Sampler currentSampler) throws InvalidVariableException {
+        JMeterVariables vars = getVariables();
+        int sum = 0;
+        String varName = ((CompoundVariable) (values[values.length - 1])).execute();
+        for (int i = 0; i < (values.length - 1); i++) {
+            sum += Integer.parseInt(((CompoundVariable) (values[i])).execute());
+        }
+        try {
+            sum += Integer.parseInt(varName);
+            varName = null; 
+        } catch (NumberFormatException ignored) {
+        }
+        String totalString = Integer.toString(sum);
+        if ((vars != null) && (varName != null)) {
+            vars.put(varName.trim(), totalString);
+        }
+        return totalString;
+    }
+    @Override
+    public synchronized void setParameters(Collection<CompoundVariable> parameters) throws InvalidVariableException {
+        checkMinParameterCount(parameters, 2);
+        values = parameters.toArray();
+    }
+    @Override
+    public String getReferenceKey() {
+        return KEY;
+    }
+    public List<String> getArgumentDesc() {
+        return desc;
+    }
+}
+==================================================
+org/apache/jmeter/monitor/parser/Constants.java
+package org.apache.jmeter.monitor.parser;
+public class Constants {
+    public static final String STATUS = "status";
+    public static final String JVM = "jvm";
+    public static final String CONNECTOR = "connector";
+    public static final String MEMORY = "memory";
+    public static final String THREADINFO = "threadInfo";
+    public static final String REQUESTINFO = "requestInfo";
+    public static final String WORKER = "worker";
+    public static final String WORKERS = "workers";
+    public static final String MEMORY_FREE = "free";
+    public static final String MEMORY_TOTAL = "total";
+    public static final String MEMORY_MAX = "max";
+    public static final String ATTRIBUTE_NAME = "name";
+    public static final String MAXTHREADS = "maxThreads";
+    public static final String MINSPARETHREADS = "minSpareThreads";
+    public static final String MAXSPARETHREADS = "maxSpareThreads";
+    public static final String CURRENTTHREADCOUNT = "currentThreadCount";
+    public static final String CURRENTBUSYTHREADS = "currentThreadsBusy";
+    public static final String MAXTIME = "maxTime=";
+    public static final String PROCESSINGTIME = "processingTime=";
+    public static final String REQUESTCOUNT = "requestCount";
+    public static final String ERRORCOUNT = "errorCount=";
+    public static final String BYTESRECEIVED = "bytesReceived";
+    public static final String BYTESSENT = "bytesSent";
+    public static final String STAGE = "stage";
+    public static final String REQUESTPROCESSINGTIME = "requestProcessingTime=";
+    public static final String REQUESTBYTESSENT = "requestBytesSent";
+    public static final String REQUESTBYTESRECEIVED = "requestBytesReceived";
+    public static final String REMOTEADDR = "remoteAddr";
+    public static final String VIRTUALHOST = "virtualHost";
+    public static final String METHOD = "method";
+    public static final String CURRENTURI = "currentUri";
+    public static final String CURRENTQUERYSTRING = "currentQueryString";
+    public static final String PROTOCOL = "protocol";
+}
+==================================================
+org/apache/jmeter/report/gui/action/ReportAddToTree.java
+package org.apache.jmeter.report.gui.action;
+import java.awt.event.ActionEvent;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import javax.swing.JComponent;
+import javax.swing.tree.TreePath;
+import org.apache.jmeter.gui.ReportGuiPackage;
+import org.apache.jmeter.gui.action.Command;
+import org.apache.jmeter.report.gui.tree.ReportTreeNode;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class ReportAddToTree implements Command {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private Map<String, String> allJMeterComponentCommands;
+    public ReportAddToTree() {
+        allJMeterComponentCommands = new HashMap<String, String>();
+        allJMeterComponentCommands.put("Add", "Add");
+    }
+    public Set<String> getActionNames() {
+        return allJMeterComponentCommands.keySet();
+    }
+    public void doAction(ActionEvent e) {
+        try {
+            TestElement node = ReportGuiPackage.getInstance().createTestElement(((JComponent) (e.getSource())).getName());
+            addObjectToTree(node);
+        } catch (Exception err) {
+            log.error("", err);
+        }
+    }
+    protected void addObjectToTree(TestElement el) {
+        ReportGuiPackage guiPackage = ReportGuiPackage.getInstance();
+        ReportTreeNode node = new ReportTreeNode(el, guiPackage.getTreeModel());
+        guiPackage.getTreeModel().insertNodeInto(node, guiPackage.getTreeListener().getCurrentNode(), guiPackage.getTreeListener().getCurrentNode().getChildCount());
+        TestElement curNode = ((TestElement) (guiPackage.getTreeListener().getCurrentNode().getUserObject()));
+        if (curNode != null) {
+            curNode.addTestElement(el);
+            guiPackage.getMainFrame().getTree().setSelectionPath(new TreePath(node.getPath()));
+        }
+    }
+}
+==================================================
+org/apache/jmeter/save/converters/HashTreeConverter.java
+package org.apache.jmeter.save.converters;
+import java.util.Iterator;
+import org.apache.jorphan.collections.HashTree;
+import com.thoughtworks.xstream.converters.MarshallingContext;
+import com.thoughtworks.xstream.converters.UnmarshallingContext;
+import com.thoughtworks.xstream.converters.collections.AbstractCollectionConverter;
+import com.thoughtworks.xstream.io.HierarchicalStreamReader;
+import com.thoughtworks.xstream.io.HierarchicalStreamWriter;
+import com.thoughtworks.xstream.mapper.Mapper;
+public class HashTreeConverter extends AbstractCollectionConverter {
+    public static String getVersion() {
+        return "$Revision: 959055 $"; 
+    }
+    @Override
+    public boolean canConvert(@SuppressWarnings("rawtypes")
+    Class arg0) {
+        return HashTree.class.isAssignableFrom(arg0);
+    }
+    @Override
+    public void marshal(Object arg0, HierarchicalStreamWriter writer, MarshallingContext context) {
+        HashTree tree = ((HashTree) (arg0));
+        Iterator<?> iter = tree.list().iterator();
+        while (iter.hasNext()) {
+            Object item = iter.next();
+            writeItem(item, context, writer);
+            writeItem(tree.getTree(item), context, writer);
+        } 
+    }
+    @Override
+    public Object unmarshal(HierarchicalStreamReader reader, UnmarshallingContext context) {
+        boolean isKey = true;
+        Object current = null;
+        HashTree tree = ((HashTree) (createCollection(context.getRequiredType())));
+        while (reader.hasMoreChildren()) {
+            reader.moveDown();
+            Object item = readItem(reader, context, tree);
+            if (isKey) {
+                tree.add(item);
+                current = item;
+                isKey = false;
+            } else {
+                tree.set(current, ((HashTree) (item)));
+                isKey = true;
+            }
+            reader.moveUp();
+        } 
+        return tree;
+    }
+    public HashTreeConverter(Mapper arg0) {
+        super(arg0);
+    }
+}
+==================================================
+org/apache/jmeter/visualizers/SplineVisualizer.java
+package org.apache.jmeter.visualizers;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.GridLayout;
+import java.awt.Image;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.border.Border;
+import javax.swing.border.EmptyBorder;
+import org.apache.jmeter.samplers.Clearable;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jmeter.visualizers.gui.AbstractVisualizer;
+import org.apache.jorphan.gui.layout.VerticalLayout;
+public class SplineVisualizer extends AbstractVisualizer implements ImageVisualizer , GraphListener , Clearable {...}
+==================================================
+woolfel/DummyTestCase.java
+package woolfel;
+import junit.framework.TestCase;
+public class DummyTestCase extends TestCase {
+    public DummyTestCase() {
+        super();
+        System.out.println("public DummyTestCase()");
+    }
+    protected DummyTestCase(String arg0) {
+        super(arg0);
+        System.out.println(("protected DummyTestCase(" + arg0) + ")");
+    }
+    @Override
+    public void setUp() {
+        System.out.println("DummyTestCase#setup(): " + getName());
+    }
+    @Override
+    public void tearDown() {
+        System.out.println("DummyTestCase#tearDown(): " + getName());
+    }
+    public void testMethodPass() {
+        try {
+            Thread.sleep(100);
+            assertEquals(10, 10);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+    public void testMethodPass2() {
+        try {
+            Thread.sleep(100);
+            assertEquals("one", "one");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+    public void testMethodFail() {
+        try {
+            Thread.sleep(100);
+            assertEquals(20, 10);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+    public void testMethodFail2() {
+        try {
+            Thread.sleep(100);
+            assertEquals("one", "two");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+    public void testFail() {
+        fail("Test failure");
+    }
+    public void testException() {
+        @SuppressWarnings("unused")
+        int i = 27 / 0; 
+    }
+    public void testStringCompareFail() {
+        assertEquals("this", "that");
+    }
+    public void testObjectCompareFail() {
+        assertEquals(new Object(), new Object());
+    }
+}
+==================================================
+org/apache/jmeter/samplers/RemoteListenerWrapper.java
+package org.apache.jmeter.samplers;
+import java.io.Serializable;
+import java.rmi.RemoteException;
+import org.apache.jmeter.engine.event.LoopIterationEvent;
+import org.apache.jmeter.engine.util.NoThreadClone;
+import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.TestListener;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.log.Logger;
+public class RemoteListenerWrapper extends AbstractTestElement implements SampleListener , TestListener , Serializable , NoThreadClone {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final long serialVersionUID = 240L;
+    private final RemoteSampleListener listener;
+    private final SampleSender sender = new StandardSampleSender();
+    public RemoteListenerWrapper() {
+        listener = null;
+        sender = null;
+    }
+    public void testStarted() {
+        log.debug("Test Started()");
+        try {
+            listener.testStarted();
+        } catch (Throwable ex) {
+            log.warn("testStarted()", ex);
+            if (ex instanceof Error) {
+                throw ((Error) (ex));
+            }
+            if (ex instanceof RuntimeException) {
+                throw ((RuntimeException) (ex));
+            }
+        }
+    }
+    public void testEnded() {
+        sender.testEnded();
+    }
+    public void testStarted(String host) {
+        log.debug("Test Started on " + host);
+        try {
+            listener.testStarted(host);
+        } catch (Throwable ex) {
+            log.error("testStarted(host)", ex);
+            if (ex instanceof Error) {
+                throw ((Error) (ex));
+            }
+            if (ex instanceof RuntimeException) {
+                throw ((RuntimeException) (ex));
+            }
+        }
+    }
+    public void testEnded(String host) {
+        sender.testEnded(host);
+    }
+    public void sampleOccurred(SampleEvent e) {
+        sender.sampleOccurred(e);
+    }
+    public void sampleStarted(SampleEvent e) {
+        log.debug("Sample started");
+        try {
+            listener.sampleStarted(e);
+        } catch (RemoteException err) {
+            log.error("sampleStarted", err);
+        }
+    }
+    public void sampleStopped(SampleEvent e) {
+        log.debug("Sample stopped");
+        try {
+            listener.sampleStopped(e);
+        } catch (RemoteException err) {
+            log.error("sampleStopped", err);
+        }
+    }
+    public void testIterationStart(LoopIterationEvent event) {
+    }
+}
+==================================================
+org/apache/jmeter/functions/CharFunction.java
+package org.apache.jmeter.functions;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import org.apache.jmeter.engine.util.CompoundVariable;
+import org.apache.jmeter.samplers.SampleResult;
+import org.apache.jmeter.samplers.Sampler;
+import org.apache.jmeter.util.JMeterUtils;
+import org.apache.jorphan.logging.LoggingManager;
+import org.apache.commons.lang.text.StrBuilder;
+import org.apache.log.Logger;
+public class CharFunction extends AbstractFunction {
+    private static final Logger log = LoggingManager.getLoggerForClass();
+    private static final List<String> desc = new LinkedList<String>();
+    private static final String KEY = "__char"; 
+    static {
+        desc.add(JMeterUtils.getResString("char_value")); 
+    }
+    private Object[] values;
+    public CharFunction() {
+    }
+    @Override
+    public synchronized String execute(SampleResult previousResult, Sampler currentSampler) throws InvalidVariableException {
+        StrBuilder sb = new StrBuilder(values.length);
+        for (int i = 0; i < values.length; i++) {
+            String numberString = ((CompoundVariable) (values[i])).execute().trim();
+            long value = 0;
+            try {
+                if (numberString.startsWith("0x")) {
+                    value = Long.parseLong(numberString.substring(2), 16);
+                } else {
+                    value = Long.parseLong(numberString);
+                }
+            } catch (NumberFormatException e) {
+                log.warn((("Could not parse " + numberString) + " : ") + e);
+            }
+            char ch = ((char) (value));
+            sb.append(ch);
+        }
+        return sb.toString();
+    }
+    @Override
+    public synchronized void setParameters(Collection<CompoundVariable> parameters) throws InvalidVariableException {
+        checkMinParameterCount(parameters, 1);
+        values = parameters.toArray();
+    }
+    @Override
+    public String getReferenceKey() {
+        return KEY;
+    }
+    public List<String> getArgumentDesc() {
+        return desc;
+    }
+}
+==================================================
+org/apache/jmeter/control/TestRandomOrderController.java
+package org.apache.jmeter.control;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.jmeter.junit.JMeterTestCase;
+import org.apache.jmeter.junit.stubs.TestSampler;
+import org.apache.jmeter.testelement.TestElement;
+public class TestRandomOrderController extends JMeterTestCase {
+    public TestRandomOrderController(String name) {
+        super(name);
+    }
+    public void testRandomOrder() {
+        testLog.debug("Testing RandomOrderController");
+        RandomOrderController roc = new RandomOrderController();
+        roc.addTestElement(new TestSampler("zero"));
+        roc.addTestElement(new TestSampler("one"));
+        roc.addTestElement(new TestSampler("two"));
+        roc.addTestElement(new TestSampler("three"));
+        TestElement sampler = null;
+        List<String> usedSamplers = new ArrayList<String>();
+        roc.initialize();
+        while ((sampler = roc.next()) != null) {
+            String samplerName = sampler.getName();
+            if (usedSamplers.contains(samplerName)) {
+                assertTrue("Duplicate sampler returned from next()", false);
+            }
+            usedSamplers.add(samplerName);
+        } 
+        assertEquals("All samplers were returned", 4, usedSamplers.size());
+    }
+    public void testRandomOrderNoElements() {
+        RandomOrderController roc = new RandomOrderController();
+        roc.initialize();
+        assertNull(roc.next());
+    }
+    public void testRandomOrderOneElement() {
+        RandomOrderController roc = new RandomOrderController();
+        roc.addTestElement(new TestSampler("zero"));
+        TestElement sampler = null;
+        List<String> usedSamplers = new ArrayList<String>();
+        roc.initialize();
+        while ((sampler = roc.next()) != null) {
+            String samplerName = sampler.getName();
+            if (usedSamplers.contains(samplerName)) {
+                assertTrue("Duplicate sampler returned from next()", false);
+            }
+            usedSamplers.add(samplerName);
+        } 
+        assertEquals("All samplers were returned", 1, usedSamplers.size());
+    }
+}
+==================================================
+org/apache/jmeter/protocol/http/control/HttpMirrorControl.java
+package org.apache.jmeter.protocol.http.control;
+import org.apache.jmeter.gui.GuiPackage;
+import org.apache.jmeter.testelement.AbstractTestElement;
+import org.apache.jmeter.testelement.property.IntegerProperty;
+public class HttpMirrorControl extends AbstractTestElement {
+    private static final long serialVersionUID = 233L;
+    private transient HttpMirrorServer server;
+    private static final int DEFAULT_PORT = 8080;
+    public static final String DEFAULT_PORT_S = Integer.toString(DEFAULT_PORT); 
+    public static final String PORT = "HttpMirrorControlGui.port"; 
+    public HttpMirrorControl() {
+        initPort(DEFAULT_PORT);
+    }
+    public HttpMirrorControl(int port) {
+        initPort(port);
+    }
+    private void initPort(int port) {
+        setProperty(new IntegerProperty(PORT, port));
+    }
+    public void setPort(int port) {
+        initPort(port);
+    }
+    public void setPort(String port) {
+        setProperty(PORT, port);
+    }
+    public int getPort() {
+        return getPropertyAsInt(PORT);
+    }
+    public String getPortString() {
+        return getPropertyAsString(PORT);
+    }
+    public int getDefaultPort() {
+        return DEFAULT_PORT;
+    }
+    public void startHttpMirror() {
+        server = new HttpMirrorServer(getPort());
+        server.start();
+        GuiPackage instance = GuiPackage.getInstance();
+        if (instance != null) {
+            instance.register(server);
+        }
+    }
+    public void stopHttpMirror() {
+        if (server != null) {
+            server.stopServer();
+            GuiPackage instance = GuiPackage.getInstance();
+            if (instance != null) {
+                instance.unregister(server);
+            }
+            try {
+                server.join(1000); 
+            } catch (InterruptedException e) {
+            }
+            server = null;
+        }
+    }
+    @Override
+    public boolean canRemove() {
+        return null == server;
+    }
+    public boolean isServerAlive() {
+        return (server != null) && server.isAlive();
+    }
+}
+==================================================
+org/apache/jmeter/control/gui/WorkBenchGui.java
+package org.apache.jmeter.control.gui;
+import java.awt.BorderLayout;
+import java.util.Collection;
+import javax.swing.JMenu;
+import javax.swing.JPopupMenu;
+import org.apache.jmeter.gui.AbstractJMeterGuiComponent;
+import org.apache.jmeter.gui.action.ActionNames;
+import org.apache.jmeter.gui.util.MenuFactory;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.testelement.WorkBench;
+import org.apache.jmeter.util.JMeterUtils;
+public class WorkBenchGui extends AbstractJMeterGuiComponent {
+    private static final long serialVersionUID = 240L;
+    public WorkBenchGui() {
+        super();
+        init();
+    }
+    public Collection<String> getMenuCategories() {
+        return null;
+    }
+    public TestElement createTestElement() {
+        WorkBench wb = new WorkBench();
+        modifyTestElement(wb);
+        return wb;
+    }
+    public void modifyTestElement(TestElement wb) {
+        super.configureTestElement(wb);
+    }
+    public JPopupMenu createPopupMenu() {
+        JPopupMenu menu = new JPopupMenu();
+        JMenu addMenu =  
+        MenuFactory.makeMenus(new String[]{ MenuFactory.NON_TEST_ELEMENTS, MenuFactory.CONTROLLERS, MenuFactory.CONFIG_ELEMENTS, MenuFactory.TIMERS, MenuFactory.PRE_PROCESSORS, MenuFactory.SAMPLERS, MenuFactory.POST_PROCESSORS, MenuFactory.ASSERTIONS, MenuFactory.LISTENERS }, JMeterUtils.getResString("add"), ActionNames.ADD);
+        menu.add(addMenu);
+        MenuFactory.addPasteResetMenu(menu);
+        MenuFactory.addFileMenu(menu);
+        return menu;
+    }
+    public String getLabelResource() {
+        return "workbench_title"; 
+    }
+    private void init() {
+        setLayout(new BorderLayout());
+        setBorder(makeBorder());
+        add(makeTitlePanel(), BorderLayout.NORTH);
+    }
+}
+==================================================
+org/apache/jmeter/testelement/ReportPage.java
+package org.apache.jmeter.testelement;
+import java.io.Serializable;
+public class ReportPage extends AbstractTestElement implements Serializable {
+    private static final long serialVersionUID = 240L;
+    public static final String REPORT_PAGE_TITLE = "ReportPage.title";
+    public static final String REPORT_PAGE_INDEX = "ReportPage.index";
+    public static final String REPORT_PAGE_CSS = "ReportPage.css";
+    public static final String REPORT_PAGE_HEADER = "ReportPage.header";
+    public static final String REPORT_PAGE_FOOTER = "ReportPage.footer";
+    public static final String REPORT_PAGE_INTRO = "ReportPage.intro";
+    public ReportPage() {
+    }
+    public static ReportPage createReportPage(String name) {
+        ReportPage page = new ReportPage();
+        return page;
+    }
+    public String getTitle() {
+        return getPropertyAsString(REPORT_PAGE_TITLE);
+    }
+    public void setTitle(String title) {
+        setProperty(REPORT_PAGE_TITLE, title);
+    }
+    public boolean getIndex() {
+        return getPropertyAsBoolean(REPORT_PAGE_INDEX);
+    }
+    public void setIndex(String makeIndex) {
+        setProperty(REPORT_PAGE_INDEX, makeIndex);
+    }
+    public String getCSS() {
+        return getPropertyAsString(REPORT_PAGE_CSS);
+    }
+    public void setCSS(String css) {
+        setProperty(REPORT_PAGE_CSS, css);
+    }
+    public String getHeaderURL() {
+        return getPropertyAsString(REPORT_PAGE_HEADER);
+    }
+    public void setHeaderURL(String url) {
+        setProperty(REPORT_PAGE_HEADER, url);
+    }
+    public String getFooterURL() {
+        return getPropertyAsString(REPORT_PAGE_FOOTER);
+    }
+    public void setFooterURL(String url) {
+        setProperty(REPORT_PAGE_FOOTER, url);
+    }
+    public String getIntroduction() {
+        return getPropertyAsString(REPORT_PAGE_INTRO);
+    }
+    public void setIntroduction(String intro) {
+        setProperty(REPORT_PAGE_INTRO, intro);
+    }
+}
+==================================================
+org/apache/jmeter/examples/sampler/gui/ExampleSamplerGui.java
+package org.apache.jmeter.examples.sampler.gui;
+import java.awt.BorderLayout;
+import java.awt.Component;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextArea;
+import org.apache.jmeter.examples.sampler.ExampleSampler;
+import org.apache.jmeter.samplers.gui.AbstractSamplerGui;
+import org.apache.jmeter.testelement.TestElement;
+import org.apache.jmeter.util.JMeterUtils;
+public class ExampleSamplerGui extends AbstractSamplerGui {
+    private static final long serialVersionUID = 240L;
+    private JTextArea data;
+    public ExampleSamplerGui() {
+        init();
+    }
+    public String getLabelResource() {
+        return "example_title"; 
+    }
+    @Override
+    public void configure(TestElement element) {
+        data.setText(element.getPropertyAsString(ExampleSampler.DATA));
+        super.configure(element);
+    }
+    public TestElement createTestElement() {
+        ExampleSampler sampler = new ExampleSampler();
+        modifyTestElement(sampler);
+        return sampler;
+    }
+    public void modifyTestElement(TestElement te) {
+        te.clear();
+        configureTestElement(te);
+        te.setProperty(ExampleSampler.DATA, data.getText());
+    }
+    private void init() {
+        setLayout(new BorderLayout(0, 5));
+        setBorder(makeBorder());
+        add(makeTitlePanel(), BorderLayout.NORTH); 
+        add(createDataPanel(), BorderLayout.CENTER);
+    }
+    private Component createDataPanel() {
+        JLabel label = new JLabel(JMeterUtils.getResString("example_data")); 
+        data = new JTextArea();
+        data.setName(ExampleSampler.DATA);
+        label.setLabelFor(data);
+        JPanel dataPanel = new JPanel(new BorderLayout(5, 0));
+        dataPanel.add(label, BorderLayout.WEST);
+        dataPanel.add(data, BorderLayout.CENTER);
+        return dataPanel;
+    }
+    @Override
+    public void clearGui() {
+        super.clearGui();
+        data.setText(""); 
+    }
+}
+==================================================
+
+
