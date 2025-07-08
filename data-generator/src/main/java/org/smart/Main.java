@@ -2,6 +2,7 @@ package org.smart;
 import org.smart.processors.*;
 import org.smart.utils.*;
 import spoon.Launcher;
+import spoon.MavenLauncher;
 import spoon.OutputType;
 import java.io.File;
 import java.io.IOException;
@@ -28,10 +29,11 @@ public class Main {
             System.exit(1);
         }
 
-        Launcher launcher = new Launcher();
-        launcher.addInputResource(repositoryPath);
+
+        MavenLauncher launcher = new MavenLauncher(repositoryPath, MavenLauncher.SOURCE_TYPE.ALL_SOURCE);
         launcher.getEnvironment().setAutoImports(true);
         launcher.getEnvironment().setCommentEnabled(true);
+        launcher.getEnvironment().setShouldCompile(false); // Some projects use lombok. This affects how getter and setter methods are defined. Alternative: https://projectlombok.org/features/delombok
 
         String concatenatedTranformations = transformations.stream().collect(Collectors.joining("_"));
 
@@ -44,9 +46,14 @@ public class Main {
 
         launcher.getEnvironment().setOutputType(OutputType.COMPILATION_UNITS);
 
+        Set<Map.Entry<String, String>> modifiedCalless = null;
+        Set<Map.Entry<String, String>> modifiedCallers = null;
+        Map<String, Set<Dependency>> modifiedClasses = null;
+        String dependenciesOutputPath = null;
 
-        boolean didOccured = false;
-        boolean uidOccured = false;
+        boolean isDiD = false;
+        boolean isUiD = false;
+
         for (String transformation : transformations) {
             switch (transformation.trim().toLowerCase()) {
                 case "dependencygraph":
@@ -68,7 +75,7 @@ public class Main {
                 case "directinstantiation":
                     System.out.println("Applying Direct Instantiation transformation...");
                     launcher.addProcessor(new DirectInstantiationProcessor());
-                    didOccured = true;
+                    isDiD = true;
                     break;
                 case "disableabstraction":
                     System.out.println("Applying Disable Abstraction transformation...");
@@ -85,7 +92,7 @@ public class Main {
                 case "unusedinjecteddependency":
                     System.out.println("Applying Unused Dependency transformation...");
                     launcher.addProcessor(new UnusedInjectedDependencyProcessor());
-                    uidOccured = true;
+                    isUiD = true;
                     break;
                 default:
                     System.err.println("Error: Unknown transformation '" + transformation + "'.");
@@ -100,29 +107,35 @@ public class Main {
             System.out.println("Number of modified assignment statements: "+InstantiationRemoverProcessor.modifiedClassesCounter);
         }
 
-        System.out.println("Transformed code saved to: " + outputDir);
-        if (didOccured || uidOccured) {
-            // Report modified classes for DirectInstantiationProcessor and UnusedInjectedDependency
-            Set<Map.Entry<String, String>> modifiedCalless = didOccured ? DirectInstantiationProcessor.modifiedCallees.entrySet() : UnusedInjectedDependencyProcessor.modifiedCallees.entrySet();
-            Set<Map.Entry<String, String>> modifiedCallers = didOccured ? DirectInstantiationProcessor.modifiedCallers.entrySet() : UnusedInjectedDependencyProcessor.modifiedCallers.entrySet();
-            Map<String, Set<Dependency>> modifiedClasses = didOccured ? DirectInstantiationProcessor.modifiedClasses : UnusedInjectedDependencyProcessor.modifiedClasses;
-            System.out.println("The following classes have been transformed used to implement DI:");
-            for (Map.Entry<String, String> entry : modifiedCalless) {
-                System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
-            }
-            System.out.println("The following classes have been transformed used to call classes that implement DI:");
-            for (Map.Entry<String, String> entry : modifiedCallers) {
-                System.out.println("\t" + entry.getKey() + " (" + entry.getValue() + ")");
-            }
-            String dependenciesOutputPath = inputFolderName+"_mutated_classes.json";
-            dependenciesOutputPath = Paths.get(outputPath, dependenciesOutputPath).toString();
-            System.out.println("Saving dependencies mapping to: " + dependenciesOutputPath);
-            try {
-                JSONWriter.writeToJSON(dependenciesOutputPath, modifiedClasses);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+        if (isDiD) {
+            modifiedCalless = DirectInstantiationProcessor.modifiedCallees.entrySet();
+            modifiedCallers = DirectInstantiationProcessor.modifiedCallers.entrySet();
+            modifiedClasses = DirectInstantiationProcessor.modifiedClasses;
+            SetUtils.processModifiedClasses(
+                    modifiedCalless,
+                    modifiedCallers,
+                    modifiedClasses,
+                    "did",
+                    inputFolderName,
+                    outputPath
+            );
         }
+
+        if (isUiD) {
+            modifiedCalless = UnusedInjectedDependencyProcessor.modifiedCallees.entrySet();
+            modifiedCallers = UnusedInjectedDependencyProcessor.modifiedCallers.entrySet();
+            modifiedClasses = UnusedInjectedDependencyProcessor.modifiedClasses;
+            SetUtils.processModifiedClasses(
+                    modifiedCalless,
+                    modifiedCallers,
+                    modifiedClasses,
+                    "uid",
+                    inputFolderName,
+                    outputPath
+            );
+        }
+
+        System.out.println("Transformed code saved to: " + outputDir);
 
     }
 }
