@@ -8,7 +8,7 @@ You will be given a list of Java classes and your task is to determine which cla
 
 {classes_under_analysis}
 
-At the end of the prompt, you will be provided with the body of all classes. You should analyze the code and determine which classes from the list below, are tightly coupled with those mentioned above. Note that you should NOT consider primitive types (e.g., int, float) as classes.
+At the end of the prompt, you will be provided with the body of all classes. You should analyze the code and determine which classes from the list below, are tightly coupled with those mentioned above. Note that you should NOT consider primitive types (e.g., int, float) as classes. You should only consider the classes that are provided in the list of class bodies below. For instance, if a class X has dependency with class Y, but class Y is not in the list of class bodies, you should not consider it as tightly coupled.
 
 ## Response Format:
 Assuming you are given this list of class names: ["Class1", "Class2", "Class3"]
@@ -72,11 +72,11 @@ You are an expert software engineer that understands code quality. You are given
 {project_readme}
 
 ## Task:
-You will be given a list of pairs of Java classes and your task is to determine whether they are tightly coupled or not. Tightly coupled classes are those with strong dependencies on each other, making them difficult to modify or test independently. The list of pairs of classes is as follows:
+You will be given a list of pairs of Java classes and your task is to determine whether they are tightly coupled or not. Tightly coupled classes are those with strong dependencies, where one or both classes rely heavily on the other, making them difficult to modify or test independently. The list of pairs of classes is as follows:
 
 {class_pair}
 
-At the end of the prompt, you will be provided with the body of each class. You should analyze the code and determine whether the classes in each pair above are tightly coupled or not. Note that you should NOT consider primitive types (e.g., int, float) as classes.
+At the end of the prompt, you will be provided with the body of each class. You should analyze the code and determine whether the classes in each pair above are tightly coupled or not. Note that you should NOT consider primitive types (e.g., int, float) as classes. You should only consider the classes that are provided in the list of class bodies below. For instance, if a class X has dependency with class Y, but class Y is not in the list of class bodies, you should not consider it as tightly coupled.
 
 ## Response Format:
 For each pair, you must provide your response in the following format:
