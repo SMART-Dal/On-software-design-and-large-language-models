@@ -2,6 +2,7 @@ package org.smart.utils;
 
 import org.apache.commons.lang3.tuple.Pair;
 import spoon.Launcher;
+import spoon.MavenLauncher;
 import spoon.reflect.CtModel;
 import spoon.reflect.declaration.CtClass;
 import spoon.reflect.declaration.CtPackage;
@@ -14,8 +15,11 @@ import java.util.stream.Collectors;
 
 
 public class DisjointClusterAnalyzer {
-    // Store the disjoint class pairs
-    public static List<Pair<ClassInformation, ClassInformation>> disjointPairs = new ArrayList<>();
+    // Add limit to save time. On average we only need 100s of perturbed classes.
+    // Exhausting all possible disjoint pairs can be very slow, especially on large code bases.
+    private static int MAX_NUMBER_OF_PAIRS = 1000;
+
+
     // Compute transitive dependencies using DFS
     private static Set<String> getTransitiveDependencies(String className, Map<String, Set<String>> dependencyGraph) {
         Set<String> transitiveDeps = new HashSet<>();
@@ -40,12 +44,10 @@ public class DisjointClusterAnalyzer {
         return transitiveDeps;
     }
 
-    public static void analyze(String resourceInput) {
-        // Step 1: Parse the codebase with Spoon
-        Launcher launcher = new Launcher();
-        launcher.addInputResource(resourceInput);
-        CtModel model = launcher.buildModel();
+    public static List<Pair<ClassInformation, ClassInformation>> analyze(MavenLauncher launcher) {
 
+        launcher.buildModel();
+        CtModel model = launcher.getModel();
         // Define test annotations to filter out test classes
         List<CtTypeReference<?>> testAnnotations = Arrays.asList(
                 launcher.getFactory().Type().createReference("org.junit.Test"),
@@ -80,6 +82,7 @@ public class DisjointClusterAnalyzer {
         }
 
         // Step 4: Identify and store disjoint pairs
+        List<Pair<ClassInformation, ClassInformation>> disjointPairs = new ArrayList<>();
         for (int i = 0; i < projectClasses.size(); i++) {
             CtClass<?> classA = projectClasses.get(i);
             String nameA = classA.getQualifiedName();
@@ -105,12 +108,15 @@ public class DisjointClusterAnalyzer {
                     ClassInformation classInformationB = new ClassInformation(nameB, classB.getPackage().getQualifiedName(), SpoonUtils.getOutputRelativePath(classB));
                     Pair<ClassInformation, ClassInformation> pair = Pair.of(classInformationA, classInformationB);
                     disjointPairs.add(pair);
-
+                    if (disjointPairs.size() >= MAX_NUMBER_OF_PAIRS) {
+                        return disjointPairs;
+                    }
 
 
                 }
             }
         }
+        return disjointPairs;
     }
 
 

@@ -1,9 +1,12 @@
 package org.smart;
+import org.apache.commons.lang3.tuple.Pair;
 import org.smart.processors.*;
 import org.smart.utils.*;
 import spoon.Launcher;
 import spoon.MavenLauncher;
 import spoon.OutputType;
+import spoon.support.Level;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -30,11 +33,11 @@ public class Main {
         }
 
 
-        MavenLauncher launcher = new MavenLauncher(repositoryPath, MavenLauncher.SOURCE_TYPE.ALL_SOURCE);
+        MavenLauncher launcher = new MavenLauncher(repositoryPath, MavenLauncher.SOURCE_TYPE.APP_SOURCE);
         launcher.getEnvironment().setAutoImports(true);
         launcher.getEnvironment().setCommentEnabled(true);
-        launcher.getEnvironment().setShouldCompile(false); // Some projects use lombok. This affects how getter and setter methods are defined. Alternative: https://projectlombok.org/features/delombok
-
+        launcher.getEnvironment().setNoClasspath(true);
+        launcher.getEnvironment().setIgnoreDuplicateDeclarations(true);
         String concatenatedTranformations = transformations.stream().collect(Collectors.joining("_"));
 
         String inputFolderName = PathUtils.getFolderName(repositoryPath);
@@ -53,17 +56,18 @@ public class Main {
 
         boolean isDiD = false;
         boolean isUiD = false;
-
+        boolean dontRebuild = false;
         for (String transformation : transformations) {
             switch (transformation.trim().toLowerCase()) {
                 case "dependencygraph":
                     System.out.println("Generating the dependency graph of the project");
-                    DisjointClusterAnalyzer.analyze(repositoryPath);
-                    System.out.println("Finished generating the dependency graph of the project and extract all disjoint pairs. Saving on disk...");
                     try {
                         String disjointPairsOutputPath = inputFolderName+"_disjointPairs.json";
                         disjointPairsOutputPath = Paths.get(outputPath, disjointPairsOutputPath).toString();
-                        JSONWriter.writeToJSON(disjointPairsOutputPath, DisjointClusterAnalyzer.disjointPairs);
+                        List<Pair<ClassInformation, ClassInformation>> disjointPairs = DisjointClusterAnalyzer.analyze(launcher);
+                        System.out.println("Finished generating the dependency graph of the project and extract all disjoint pairs. Saving on disk...");
+                        JSONWriter.writeToJSON(disjointPairsOutputPath, disjointPairs);
+                        dontRebuild = true;
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -99,8 +103,13 @@ public class Main {
                     System.exit(1);
             }
         }
+        // Only run if we do not the dependency graph
+        if (!dontRebuild)
+        {
+            System.out.println("Running transformations...");
+            launcher.run();
+        }
 
-        launcher.run();
 
         System.out.println("Transformations applied successfully.");
         if (SetUtils.containsStringList(transformations, "instantiationremover")) {
