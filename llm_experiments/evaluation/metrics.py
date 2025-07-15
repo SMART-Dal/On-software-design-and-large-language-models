@@ -1,5 +1,6 @@
 from collections  import defaultdict
 from sklearn.metrics import precision_score, recall_score, f1_score
+from utils.eval_utils import to_canonical_set
 
 class BinaryPromptEval:
     def __init__(self, ground_truth, answers) -> None:
@@ -63,14 +64,10 @@ class RetrievalPromptEval:
         # Normalize the pairs by sorting the classes in each pair. This is what frozenset does as a by product.
         # forzenset([foo, bar]) == forzenset([bar, foo]) is True. We use frozenset instead of set to make it hashable.
         # also lower case the classes to avoid case sensitivity issues.
-        self.ground_truth = {
-            frozenset([pair[0].lower(), pair[1].lower()]) for pair in ground_truth
-        }
-        self.answers = {
-            frozenset([pair[0].lower(), pair[1].lower()]) for pair in answers
-        }
+        self.ground_truth = to_canonical_set(ground_truth)
+        self.answers = to_canonical_set(answers)
 
-    def calculate_metrics(self):
+    def calculate_f1_p_r(self):
         """
         Calculate precision, recall and f1-score
         """
@@ -92,10 +89,42 @@ class RetrievalPromptEval:
             "f1": f1
         }
     
+    def get_unretrieved_ground_truth(self):
+        """
+        Get the ground truth pairs that were not retrieved by the model.
+        """
+        return self.ground_truth - self.answers
+    
     def reset(self):
         """
         Reset the evaluation metrics
         """
         self.ground_truth = set()
         self.answers = set()
-        
+         
+def calculate_jaccard_for_pairs(list_a, list_b):
+    """
+    Calculates the Jaccard Similarity between two lists of pairs,
+    where the position of elements in a pair does not matter.
+
+    Args:
+        list_a: The first list of tuples.
+        list_b: The second list of tuples.
+
+    Returns:
+        The Jaccard Similarity score as a float between 0.0 and 1.0.
+    """
+    # Convert both lists to sets of canonical pairs
+    set_a = to_canonical_set(list_a)
+    set_b = to_canonical_set(list_b)
+
+    # Calculate the size of the intersection and union
+    intersection_size = len(set_a.intersection(set_b))
+    union_size = len(set_a.union(set_b))
+
+    # Calculate Jaccard Similarity
+    if union_size == 0:
+        # If both lists are empty, they are perfectly similar.
+        return 1.0
+    else:
+        return intersection_size / union_size
