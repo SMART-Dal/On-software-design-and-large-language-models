@@ -15,6 +15,32 @@
 # IMPORTANT: Set the path to your data generator JAR file here.
 DATA_GENERATOR_JAR="../data-generator/target/data-generator-1.0-SNAPSHOT-jar-with-dependencies.jar"
 
+# Function to check if mutation output already exists
+check_mutation_output() {
+    local project_name=$1
+    local mutation=$2
+    case $mutation in
+        dependencygraph)
+            [ -f "$OUTPUT_DIR/${project_name}_disjointPairs.json" ] && return 0
+            ;;
+        instantiationremover)
+            [ -d "$OUTPUT_DIR/${project_name}-transformed_instantiationremover" ] && \
+            [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_instantiationremover" 2>/dev/null)" ] && return 0
+            ;;
+        directinstantiation)
+            [ -d "$OUTPUT_DIR/${project_name}-transformed_directinstantiation" ] && \
+            [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_directinstantiation" 2>/dev/null)" ] && \
+            [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_did.json" ] && return 0
+            ;;
+        unusedinjecteddependency)
+            [ -d "$OUTPUT_DIR/${project_name}-transformed_unusedinjecteddependency" ] && \
+            [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_unusedinjecteddependency" 2>/dev/null)" ] && \
+            [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_uid.json" ] && return 0
+            ;;
+    esac
+    return 1
+}
+
 # --- Main Script ---
 
 # 1. Argument and Path Validation
@@ -68,6 +94,11 @@ for subdir in "$INPUT_DIR"/*/; do
 
     # 4. Iterate Over and Apply Each Mutation
     for mutation in "${mutations[@]}"; do
+        # Check if the mutation output already exists
+        if check_mutation_output "$project_name" "$mutation"; then
+            echo "  Mutation '$mutation' already applied for project '$project_name'. Skipping..."
+            continue
+        fi
         echo "  Applying mutation: $mutation..."
 
         # Execute the JAR file
@@ -84,22 +115,22 @@ for subdir in "$INPUT_DIR"/*/; do
                 fi
                 ;;
             instantiationremover)
-                if [ -d "$OUTPUT_DIR/${project_name}_instantiationremover" ] && \
-                   [ -n "$(ls -A "$OUTPUT_DIR/${project_name}_instantiationremover")" ]; then
+                if [ -d "$OUTPUT_DIR/${project_name}-transformed_instantiationremover" ] && \
+                   [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_instantiationremover")" ]; then
                     mutation_successful=true
                 fi
                 ;;
             directinstantiation)
-                if [ -d "$OUTPUT_DIR/${project_name}_directinstantiation" ] && \
-                   [ -n "$(ls -A "$OUTPUT_DIR/${project_name}_directinstantiation")" ] && \
-                   [ -f "$OUTPUT_DIR/${project_name}_mutated_classes.json" ]; then
+                if [ -d "$OUTPUT_DIR/${project_name}-transformed_directinstantiation" ] && \
+                   [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_directinstantiation")" ] && \
+                   [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_did.json" ]; then
                     mutation_successful=true
                 fi
                 ;;
             unusedinjecteddependency)
-                if [ -d "$OUTPUT_DIR/${project_name}_unusedinjecteddependency" ] && \
-                   [ -n "$(ls -A "$OUTPUT_DIR/${project_name}_unusedinjecteddependency")" ] && \
-                   [ -f "$OUTPUT_DIR/${project_name}_mutated_classes.json" ]; then
+                if [ -d "$OUTPUT_DIR/${project_name}-transformed_unusedinjecteddependency" ] && \
+                   [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_unusedinjecteddependency")" ] && \
+                   [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_uid.json" ]; then
                     mutation_successful=true
                 fi
                 ;;
