@@ -6,10 +6,19 @@ import json
 import re
 import os
 
+def convert_string_none(obj):
+    if isinstance(obj, list):
+        return [convert_string_none(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: convert_string_none(value) for key, value in obj.items()}
+    elif obj == "None":  # Check for exact string match
+        return None
+    else:
+        return obj
+    
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--input_folder", type=str, required=True, help="Path to the folder containing input files.")
-    parser.add_argument("--output_folder", type=str, required=True, help="Path to the folder where output files will be saved.")
     args = parser.parse_args()
     return args
 
@@ -52,7 +61,7 @@ def process_files(input_folder, output_folder):
             output_file_path = os.path.join(output_folder, os.path.basename(file))
             data = {
                 'cot': content['cot'] if 'cot' in content else None,
-                'answer': extracted_answer
+                'answer': convert_string_none(extracted_answer),
             }
             save_to_json(data, output_file_path)
         else:
@@ -60,10 +69,14 @@ def process_files(input_folder, output_folder):
 
 if __name__ == "__main__":
     args = parse_args()
-    input_folder = args.input_folder
-    output_folder = args.output_folder
+    input_folder_path = args.input_folder
+    input_folder = os.path.basename(input_folder_path)
+    output_folder_name = f"{input_folder}_cleaned"
+    output_folder = os.path.join(os.path.dirname(input_folder_path), output_folder_name)
+    # Create output folder if it does not exist
+    os.makedirs(output_folder, exist_ok=True)
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    process_files(input_folder, output_folder)
+    process_files(input_folder_path, output_folder)
