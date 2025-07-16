@@ -110,9 +110,14 @@ def main():
         content, readable = read_file_content(full_path)
         if not readable:
             continue
+        # Remove the dependency if it has no dependency chain
+        new_value = []
+        for v in value:
+            if len(v['dependencyChain']) > 1:
+                new_value.append(v)
         content = remove_comments_and_docstrings(content)
         token_count = len(tokenizer.encode(content).ids)
-        perturbed_data[key] = {'content': content, 'token_count': token_count, 'dependencies': value}
+        perturbed_data[key] = {'content': content, 'token_count': token_count, 'dependencies': new_value}
 
     perturbed_classes_token_counts = [value['token_count'] for value in perturbed_data.values()]
     q25, q75 = calculate_iqr(perturbed_classes_token_counts)
