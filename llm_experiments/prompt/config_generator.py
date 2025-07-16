@@ -77,10 +77,10 @@ def generate_yml_config(
     # Define the YML content using an f-string as a template
     yml_content = f"""
 project_name: {project_name}
-perturbed_project_path: "{root_dir}/{project_name}-transformed_{perturbation_map[perturbation_types[0]]}"
+perturbed_project_path: "{root_dir}/{project_name}-transformed_{perturbation_types[0]}"
 noisy_project_path: "{root_dir}/{project_name}-transformed_instantiationremover"
 disjoint_json: "{root_dir}/{project_name}_disjointPairs.json"
-perturbed_json: "{root_dir}/{project_name}_mutated_classes_{perturbation_map[perturbation_types[0]]}.json"
+perturbed_json: "{root_dir}/{project_name}_mutated_classes_{perturbation_types[0]}.json"
 output_dir: {output_dir}
 seed: {seed}
 model_tag: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
