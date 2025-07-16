@@ -11,7 +11,7 @@ from utils.preprocessing import remove_comments_and_docstrings, fix_nested_class
 from utils.tree_sitter_utils import remove_class_bodies
 import tree_sitter_java as tsjava
 from tree_sitter import Language, Parser
-from prompt.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BASED_COUPLING, HYBRID_PROMPT
+from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BASED_COUPLING, HYBRID_PROMPT
 from tqdm import tqdm
 
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
