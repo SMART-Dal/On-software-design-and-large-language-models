@@ -7,7 +7,7 @@ import numpy as np
 from tokenizers import Tokenizer
 from utils.io import read_json_file, read_file_content, save_config_to_yaml, save_to_json, parse_yaml_config
 from utils.paths import get_absolute_file_paths
-from utils.preprocessing import remove_comments_and_docstrings
+from utils.preprocessing import remove_comments_and_docstrings, fix_nested_class_paths
 from utils.tree_sitter_utils import remove_class_bodies
 import tree_sitter_java as tsjava
 from tree_sitter import Language, Parser
@@ -79,7 +79,6 @@ def generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_cl
 
 def main():
 
-
     arguments = parser_args()
     args = parse_yaml_config(arguments.config_file)
     epoch_time = int(time.time_ns())
@@ -101,7 +100,9 @@ def main():
     print(f"Experiment configuration:")
     for key, value in vars(args).items():
         print(f"{key}: {value}")
-
+    # In some cases, the class might be defined within another class. For instance Foo$Bar, the class Bar will be in Foo.java and not Bar.java
+    print("Fixing nested class paths in the perturbed data...")
+    raw_perturbed_data = {key: fix_nested_class_paths(value) for key, value in raw_perturbed_data.items()}
     # Set the IQR range based on the token length of the perturbed classes. This range will be used to select noisy classes as well.
     perturbed_data = {}
     for key, value in tqdm(raw_perturbed_data.items(), desc='Reading perturbed classes to determine IQR range'):
