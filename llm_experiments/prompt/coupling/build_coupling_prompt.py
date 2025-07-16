@@ -1,4 +1,5 @@
 import argparse
+from copy import deepcopy
 import os
 import random
 import time
@@ -83,8 +84,7 @@ def main():
     epoch_time = int(time.time_ns())
     output_dir = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{args.prompt_template}_{epoch_time}"
     output_dir = os.path.join(args.output_dir, output_dir)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    
     
     # Setup tree-sitter parser
     JAVA_LANGUAGE = Language(tsjava.language())
@@ -94,6 +94,9 @@ def main():
 
     raw_perturbed_data = read_json_file(args.perturbed_json)
     raw_disjoint_pairs = read_json_file(args.disjoint_json)
+
+    # Where the dataset will be stored
+    dataset = {}
 
     # Print the experiment configuration using for loop
     print(f"Experiment configuration:")
@@ -211,6 +214,30 @@ def main():
             loosely_coupled_pairs = generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_classes)
             all_class_pairs = loosely_coupled_pairs + tightly_coupeled_pairs
 
+        elif args.prompt_template == 'hybrid':
+            # Get the first element of each class pair of tightly_coupled_pairs
+            classes_under_analysis = set(pair[0] for pair in tightly_coupeled_pairs)
+            classes_under_analysis = list(classes_under_analysis)
+            # Get the noisy classes
+            _noisy_classes = set(n_class['className'] for n_class in noise_classes)
+            # Add the noisy classes to the classes under analysis
+            classes_under_analysis.extend(_noisy_classes)
+
+        # Build the groundtruth for the prompt
+        if args.prompt_template == 'retrieval_based' or args.prompt_template == 'hybrid':
+            ground_truth = deepcopy(tightly_coupeled_pairs)
+            if args.prompt_template == 'hybrid':
+                non_coupled_pairs = [(_cls, None) for _cls in _noisy_classes]
+                ground_truth.extend(non_coupled_pairs)
+        
+        
+        elif args.prompt_template == 'binary_based':
+            print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of loosely coupled pairs: {len(loosely_coupled_pairs)}")
+            ground_truth_tightly_coupeled_pairs = [ {"pair": p, "coupled": True} for p in tightly_coupeled_pairs]
+            ground_truth_loosely_coupled_pairs = [ {"pair": p, "coupled": False} for p in loosely_coupled_pairs]
+            ground_truth = ground_truth_loosely_coupled_pairs + ground_truth_tightly_coupeled_pairs
+
+        all_prompts = []
         # Generate a prompt for each shuffle
         for shuff in range(args.n_shuffles):
             # Shuffle the classes
@@ -239,13 +266,6 @@ def main():
                     )
             elif args.prompt_template == 'hybrid':
                 prompt_template = HYBRID_PROMPT
-                # Get the first element of each class pair of tightly_coupled_pairs
-                classes_under_analysis = set(pair[0] for pair in tightly_coupeled_pairs)
-                classes_under_analysis = list(classes_under_analysis)
-                # Get the noisy classes
-                _noisy_classes = set(n_class['className'] for n_class in noise_classes)
-                # Add the noisy classes to the classes under analysis
-                classes_under_analysis.extend(_noisy_classes)
                 # Shuffle the classes
                 random.shuffle(classes_under_analysis)
                 # Generate the prompt
@@ -258,11 +278,7 @@ def main():
             len_prompt = len(tokenizer.encode(prompt).ids)
             # Future idea: Randomly remove the body of classes in the prompt to make it more challenging
             print(f"Number of involved classes: {len(classes)}, Prompt token count: {len_prompt}, R={noise_ratio}, S={shuff}")
-            prompt_file_name = f"prompt_R_{noise_ratio}_S_{shuff}.txt"
-            prompt_file_path = os.path.join(output_dir, prompt_file_name)
-            with open(prompt_file_path, 'w') as f:
-                f.write(prompt)
-            # Save metadata during last shuffle
+            all_prompts.append(prompt)
             if shuff == args.n_shuffles - 1:
                 metadata = {
                     'noise_ratio': noise_ratio,
@@ -273,34 +289,26 @@ def main():
                     'model_tag': args.model_tag,
                     'classes': [c[0] for c in classes],
                 }
-                project_name = args.project_name
-                metadata_file_name = f"{project_name}_prompt_R_{noise_ratio}_metadata.json"
-                metadata_file_path = os.path.join(output_dir, metadata_file_name)
-                # Save the class pairs to a file that represent the ground truth
-                class_pairs_file_name = f"{project_name}_prompt_R_{noise_ratio}_ground_truth.json"
-                class_pairs_file_path = os.path.join(output_dir, class_pairs_file_name)
-                if args.prompt_template == 'retrieval_based' or args.prompt_template == 'hybrid':
-                    ground_truth_file_name = f"{project_name}_prompt_R_{noise_ratio}_ground_truth.json"
-                    ground_truth_file_path = os.path.join(output_dir, ground_truth_file_name)
-                    ground_truth_pairs = tightly_coupeled_pairs
-                    if args.prompt_template == 'hybrid':
-                        non_coupled_pairs = [(_cls, None) for _cls in _noisy_classes]
-                        ground_truth_pairs.extend(non_coupled_pairs)
-                    save_to_json(ground_truth_pairs, ground_truth_file_path)
-                
-                elif args.prompt_template == 'binary_based':
-                    print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of loosely coupled pairs: {len(loosely_coupled_pairs)}")
-                    ground_truth_tightly_coupeled_pairs = [ {"pair": p, "coupled": True} for p in tightly_coupeled_pairs]
-                    ground_truth_loosely_coupled_pairs = [ {"pair": p, "coupled": False} for p in loosely_coupled_pairs]
-                    ground_truth_results = ground_truth_loosely_coupled_pairs + ground_truth_tightly_coupeled_pairs
-                    save_to_json(ground_truth_results, class_pairs_file_path)
+                noise_ratio_data = {
+                    'metadata': metadata,
+                    'ground_truth': ground_truth,
+                    'prompts': all_prompts,
+                }
 
-                save_to_json(metadata, metadata_file_path)
+                # Save the ground truth to the dataset
+                dataset[noise_ratio] = noise_ratio_data
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     # Include the content of the prompt template in the config file
     args.template = prompt_template
     # Copy the config file to the output directory for reproducibility
     config_file_name = os.path.basename(arguments.config_file)
     config_file_path = os.path.join(output_dir, config_file_name)
+    # Save the dataset to a JSON file
+    dataset_file_name = f"dataset.json"
+    dataset_file_path = os.path.join(output_dir, dataset_file_name)
+    save_to_json(dataset, dataset_file_path)
     # Save to YML at prompt directory
     save_config_to_yaml(args, config_file_path)
     print(f"Prompt generation completed. Output directory: {output_dir}")
