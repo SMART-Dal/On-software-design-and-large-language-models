@@ -2,7 +2,6 @@ import argparse
 import os
 import random
 import time
-import shutil
 import numpy as np
 from tokenizers import Tokenizer
 from utils.io import read_json_file, read_file_content, save_config_to_yaml, save_to_json, parse_yaml_config
@@ -223,13 +222,10 @@ def main():
                 classes_str += f"{content}\n"
                 classes_str += f"{'=' * 50}\n"
             
-            readme_content, _ = read_file_content(args.readme_path)
-            # prompt = prompt_template(args.project_name, readme_content, classes_str)
             if args.prompt_template == 'retrieval':
                 prompt_template = RETRIEVAL_BASED_COUPLING
                 prompt = RETRIEVAL_BASED_COUPLING.format(
                     project_name=args.project_name, 
-                    project_readme=readme_content, 
                     list_of_classes=classes_str
                     )
             elif args.prompt_template == 'binary':
@@ -238,7 +234,6 @@ def main():
                 random.shuffle(all_class_pairs)
                 prompt = BINARY_BASED_COUPLING.format(
                         project_name=args.project_name,
-                        project_readme=readme_content,
                         class_pair=all_class_pairs,
                         list_of_classes=classes_str
                     )
@@ -256,7 +251,6 @@ def main():
                 # Generate the prompt
                 prompt = HYBRID_PROMPT.format(
                     project_name=args.project_name,
-                    project_readme=readme_content,
                     classes_under_analysis=classes_under_analysis,
                     list_of_classes=classes_str
                 )
