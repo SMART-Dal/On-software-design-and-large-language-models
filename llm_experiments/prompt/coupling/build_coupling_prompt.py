@@ -15,6 +15,7 @@ from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BA
 from tqdm import tqdm
 
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
+TEMPLATES = ['retrieval', 'binary', 'hybrid']
 
 def calculate_iqr(data):
     q75, q25 = np.percentile(data, [75 ,25])
@@ -82,8 +83,7 @@ def main():
     arguments = parser_args()
     args = parse_yaml_config(arguments.config_file)
     epoch_time = int(time.time_ns())
-    output_dir = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{args.prompt_template}_{epoch_time}"
-    output_dir = os.path.join(args.output_dir, output_dir)
+
     
     
     # Setup tree-sitter parser
@@ -196,122 +196,131 @@ def main():
     noise_candidates = sorted(noise_candidates, key=lambda x: x['token_count'])
     # Noise ratio: (normal classes) / total classes where total classes = normal classes + perturbed classes + perturbed classes's dependencies + dep_chain of each dependency
     # Based on this ratio, we will select the number of noisy classes to include in the prompt
-    for noise_ratio in NOISE_RATIOS:
-        n_noise_classes = int(noise_ratio * num_of_perturbed_classes / (1 - noise_ratio))
-        # Select the noise_classes-th classes given that noise_candidates are sorted by token count
-        noise_classes = noise_candidates[:n_noise_classes]
-        # Collect classes to include in the prompt
-        classes = []
-        for n_class in noise_classes:
-            content = n_class['content']
-            path = n_class['path']
-            classes.append((path, content))
-        
-        for path, content in collapsed_paths.items():
-            classes.append((path, content))
-
-        if args.prompt_template == 'binary':
-            loosely_coupled_pairs = generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_classes)
-            all_class_pairs = loosely_coupled_pairs + tightly_coupeled_pairs
-
-        elif args.prompt_template == 'hybrid':
-            # Get the first element of each class pair of tightly_coupled_pairs
-            classes_under_analysis = set(pair[0] for pair in tightly_coupeled_pairs)
-            classes_under_analysis = list(classes_under_analysis)
-            # Get the noisy classes
-            _noisy_classes = set(n_class['className'] for n_class in noise_classes)
-            # Add the noisy classes to the classes under analysis
-            classes_under_analysis.extend(_noisy_classes)
-
-        # Build the groundtruth for the prompt
-        if args.prompt_template == 'retrieval_based' or args.prompt_template == 'hybrid':
-            ground_truth = deepcopy(tightly_coupeled_pairs)
-            if args.prompt_template == 'hybrid':
-                non_coupled_pairs = [(_cls, None) for _cls in _noisy_classes]
-                ground_truth.extend(non_coupled_pairs)
-        
-        
-        elif args.prompt_template == 'binary_based':
-            print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of loosely coupled pairs: {len(loosely_coupled_pairs)}")
-            ground_truth_tightly_coupeled_pairs = [ {"pair": p, "coupled": True} for p in tightly_coupeled_pairs]
-            ground_truth_loosely_coupled_pairs = [ {"pair": p, "coupled": False} for p in loosely_coupled_pairs]
-            ground_truth = ground_truth_loosely_coupled_pairs + ground_truth_tightly_coupeled_pairs
-
-        all_prompts = []
-        # Generate a prompt for each shuffle
-        for shuff in range(args.n_shuffles):
-            # Shuffle the classes
-            random.shuffle(classes)
-            # Generate the prompt
-            classes_str = ""
-            for path, content in classes:
-                classes_str += f"{path}\n"
-                classes_str += f"{content}\n"
-                classes_str += f"{'=' * 50}\n"
+    for template_name in TEMPLATES:
+        print(f"Generating prompts for template: {template_name}")
+        for noise_ratio in NOISE_RATIOS:
+            n_noise_classes = int(noise_ratio * num_of_perturbed_classes / (1 - noise_ratio))
+            # Select the noise_classes-th classes given that noise_candidates are sorted by token count
+            noise_classes = noise_candidates[:n_noise_classes]
+            # Collect classes to include in the prompt
+            classes = []
+            for n_class in noise_classes:
+                content = n_class['content']
+                path = n_class['path']
+                classes.append((path, content))
             
-            if args.prompt_template == 'retrieval':
-                prompt_template = RETRIEVAL_BASED_COUPLING
-                prompt = RETRIEVAL_BASED_COUPLING.format(
-                    project_name=args.project_name, 
-                    list_of_classes=classes_str
-                    )
-            elif args.prompt_template == 'binary':
-                prompt_template = BINARY_BASED_COUPLING
-                # Shuffle the class pairs
-                random.shuffle(all_class_pairs)
-                prompt = BINARY_BASED_COUPLING.format(
+            for path, content in collapsed_paths.items():
+                classes.append((path, content))
+
+            if template_name == 'binary':
+                loosely_coupled_pairs = generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_classes)
+                all_class_pairs = loosely_coupled_pairs + tightly_coupeled_pairs
+
+            elif template_name == 'hybrid':
+                # Get the first element of each class pair of tightly_coupled_pairs
+                classes_under_analysis = set(pair[0] for pair in tightly_coupeled_pairs)
+                classes_under_analysis = list(classes_under_analysis)
+                # Get the noisy classes
+                _noisy_classes = set(n_class['className'] for n_class in noise_classes)
+                # Add the noisy classes to the classes under analysis
+                classes_under_analysis.extend(_noisy_classes)
+
+            # Build the groundtruth for the prompt
+            if template_name == 'retrieval' or template_name == 'hybrid':
+                ground_truth = deepcopy(tightly_coupeled_pairs)
+                if template_name == 'hybrid':
+                    non_coupled_pairs = [(_cls, None) for _cls in _noisy_classes]
+                    ground_truth.extend(non_coupled_pairs)
+            
+            
+            elif template_name == 'binary':
+                print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of none coupled pairs: {len(loosely_coupled_pairs)}")
+                ground_truth_tightly_coupeled_pairs = [ {"pair": p, "coupled": True} for p in tightly_coupeled_pairs]
+                ground_truth_loosely_coupled_pairs = [ {"pair": p, "coupled": False} for p in loosely_coupled_pairs]
+                ground_truth = ground_truth_loosely_coupled_pairs + ground_truth_tightly_coupeled_pairs
+
+            all_prompts = []
+            # Generate a prompt for each shuffle
+            for shuff in range(args.n_shuffles):
+                # Shuffle the classes
+                random.shuffle(classes)
+                # Generate the prompt
+                classes_str = ""
+                for path, content in classes:
+                    classes_str += f"{path}\n"
+                    classes_str += f"{content}\n"
+                    classes_str += f"{'=' * 50}\n"
+                
+                if template_name == 'retrieval':
+                    prompt_template = RETRIEVAL_BASED_COUPLING
+                    prompt = RETRIEVAL_BASED_COUPLING.format(
+                        project_name=args.project_name, 
+                        list_of_classes=classes_str
+                        )
+                elif template_name == 'binary':
+                    prompt_template = BINARY_BASED_COUPLING
+                    # Shuffle the class pairs
+                    random.shuffle(all_class_pairs)
+                    prompt = BINARY_BASED_COUPLING.format(
+                            project_name=args.project_name,
+                            class_pair=all_class_pairs,
+                            list_of_classes=classes_str
+                        )
+                elif template_name == 'hybrid':
+                    prompt_template = HYBRID_PROMPT
+                    # Shuffle the classes
+                    random.shuffle(classes_under_analysis)
+                    # Generate the prompt
+                    prompt = HYBRID_PROMPT.format(
                         project_name=args.project_name,
-                        class_pair=all_class_pairs,
+                        classes_under_analysis=classes_under_analysis,
                         list_of_classes=classes_str
                     )
-            elif args.prompt_template == 'hybrid':
-                prompt_template = HYBRID_PROMPT
-                # Shuffle the classes
-                random.shuffle(classes_under_analysis)
-                # Generate the prompt
-                prompt = HYBRID_PROMPT.format(
-                    project_name=args.project_name,
-                    classes_under_analysis=classes_under_analysis,
-                    list_of_classes=classes_str
-                )
 
-            len_prompt = len(tokenizer.encode(prompt).ids)
-            # Future idea: Randomly remove the body of classes in the prompt to make it more challenging
-            print(f"Number of involved classes: {len(classes)}, Prompt token count: {len_prompt}, R={noise_ratio}, S={shuff}")
-            all_prompts.append(prompt)
-            if shuff == args.n_shuffles - 1:
-                metadata = {
-                    'noise_ratio': noise_ratio,
-                    'n_perturbed_classes': num_of_perturbed_classes,
-                    'n_noise_classes': n_noise_classes,
-                    'total_classes': len(classes),
-                    'prompt_token_count': len_prompt,
-                    'model_tag': args.model_tag,
-                    'classes': [c[0] for c in classes],
-                }
-                noise_ratio_data = {
-                    'metadata': metadata,
-                    'ground_truth': ground_truth,
-                    'prompts': all_prompts,
-                }
+                len_prompt = len(tokenizer.encode(prompt).ids)
+                # Future idea: Randomly remove the body of classes in the prompt to make it more challenging
+                print(f"Number of involved classes: {len(classes)}, Prompt token count: {len_prompt}, R={noise_ratio}, S={shuff}")
+                all_prompts.append(prompt)
+                if shuff == args.n_shuffles - 1:
+                    metadata = {
+                        'noise_ratio': noise_ratio,
+                        'n_perturbed_classes': num_of_perturbed_classes,
+                        'n_noise_classes': n_noise_classes,
+                        'total_classes': len(classes),
+                        'prompt_token_count': len_prompt,
+                        'model_tag': args.model_tag,
+                        'classes': [c[0] for c in classes],
+                    }
+                    noise_ratio_data = {
+                        'metadata': metadata,
+                        'ground_truth': ground_truth,
+                        'prompts': all_prompts,
+                    }
 
-                # Save the ground truth to the dataset
-                dataset[noise_ratio] = noise_ratio_data
-    
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    # Include the content of the prompt template in the config file
-    args.template = prompt_template
-    # Copy the config file to the output directory for reproducibility
-    config_file_name = os.path.basename(arguments.config_file)
-    config_file_path = os.path.join(output_dir, config_file_name)
-    # Save the dataset to a JSON file
-    dataset_file_name = f"dataset.json"
-    dataset_file_path = os.path.join(output_dir, dataset_file_name)
-    save_to_json(dataset, dataset_file_path)
-    # Save to YML at prompt directory
-    save_config_to_yaml(args, config_file_path)
-    print(f"Prompt generation completed. Output directory: {output_dir}")
+                    # Save the ground truth to the dataset
+                    dataset[noise_ratio] = noise_ratio_data
+        
+        
+        output_dir = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{epoch_time}"
+        output_dir = os.path.join(args.output_dir, output_dir)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        # Create a subdirectory for the current template
+        output_dir = os.path.join(output_dir, template_name)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        # Include the content of the prompt template in the config file
+        args.template = prompt_template
+        # Copy the config file to the output directory for reproducibility
+        config_file_name = os.path.basename(arguments.config_file)
+        config_file_path = os.path.join(output_dir, config_file_name)
+        # Save the dataset to a JSON file
+        dataset_file_name = f"dataset.json"
+        dataset_file_path = os.path.join(output_dir, dataset_file_name)
+        save_to_json(dataset, dataset_file_path)
+        # Save to YML at prompt directory
+        save_config_to_yaml(args, config_file_path)
+        print(f"Prompt generation completed. Output directory: {output_dir}")
 
 
         
