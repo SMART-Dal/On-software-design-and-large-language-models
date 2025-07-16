@@ -1,8 +1,5 @@
 HYBRID_PROMPT =  """
-You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. Below is the content of its README file to provide context about its purpose:
-## README:
-{project_readme}
-
+You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. 
 ## Task:
 You will be given a list of Java classes and your task is to determine which classes they are tightly coupled with from a bigger list, if any. Tightly coupled classes are those with strong dependencies, where one or both classes rely heavily on the other, making them difficult to modify or test independently. The list of names of classes is as follows:
 
@@ -37,11 +34,7 @@ In this scenario, Class1 is tightly coupled with classes Class8 and Class9, Clas
 """
 
 RETRIEVAL_BASED_COUPLING = """
-You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. Below is the content of its README file to provide context about its purpose:
-
-## README:
-{project_readme}
-
+You are an expert software engineer that understands code quality. You are given a Java project named {project_name}.
 ## Task:
 Your task is to analyze the dependencies between these classes and identify any tightly coupled classes. Tightly coupled classes are those with strong dependencies on each other, making them difficult to modify or test independently. 
 
@@ -66,11 +59,7 @@ If no classes are tightly coupled, please provide an empty list []. You should o
 """
 
 BINARY_BASED_COUPLING = """
-You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. Below is the content of its README file to provide context about its purpose:
-
-## README:
-{project_readme}
-
+You are an expert software engineer that understands code quality. You are given a Java project named {project_name}.
 ## Task:
 You will be given a list of pairs of Java classes and your task is to determine whether they are tightly coupled or not. Tightly coupled classes are those with strong dependencies, where one or both classes rely heavily on the other, making them difficult to modify or test independently. The list of pairs of classes is as follows:
 
