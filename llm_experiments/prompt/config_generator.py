@@ -69,13 +69,18 @@ def generate_yml_config(
     # Format the list of perturbation types into a YAML-friendly string
     perturbations_str = "\n".join([f"  - {ptype}" for ptype in perturbation_types])
 
+    perturbation_map = {
+       'did': 'directinstantiation',
+       'uid': 'unusedinjecteddependency'
+    }
+
     # Define the YML content using an f-string as a template
     yml_content = f"""
 project_name: {project_name}
-perturbed_project_path: "{root_dir}/{project_name}-transformed_directinstantiation"
+perturbed_project_path: "{root_dir}/{project_name}-transformed_{perturbation_map[perturbation_types[0]]}"
 noisy_project_path: "{root_dir}/{project_name}-transformed_instantiationremover"
 disjoint_json: "{root_dir}/{project_name}_disjointPairs.json"
-perturbed_json: "{root_dir}/{project_name}_mutated_classes_did.json"
+perturbed_json: "{root_dir}/{project_name}_mutated_classes_{perturbation_map[perturbation_types[0]]}.json"
 output_dir: {output_dir}
 seed: {seed}
 model_tag: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
