@@ -16,7 +16,6 @@ def parse_args():
     parser.add_argument('--ymls_output_dir', type=str, required=True, help='Directory to save the output YML files.')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility.')
     parser.add_argument('--n_shuffles', type=int, default=10, help='Number of shuffles to perform.')
-    parser.add_argument('--template_type', type=str, required=True, help='Type of prompt template to use.')
     parser.add_argument('--perturbation_types', nargs='+', required=True, help='List of perturbation types.')
 
     return parser.parse_args()
@@ -53,7 +52,6 @@ def generate_yml_config(
     root_dir: str,
     seed: int,
     n_shuffles: int,
-    template_type: str,
     perturbation_types: list[str],
     output_filename: str
 ) -> None:
@@ -65,7 +63,6 @@ def generate_yml_config(
         output_dir (str): The directory where output will be stored.
         seed (int): The random seed for the process.
         n_shuffles (int): The number of shuffles to perform.
-        template_type (str): The type of prompt template to use.
         perturbation_types (list[str]): A list of perturbation types.
         output_filename (str): The path and name of the output .yml file.
     """
@@ -83,7 +80,6 @@ output_dir: {output_dir}
 seed: {seed}
 model_tag: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 n_shuffles: {n_shuffles}
-prompt_template: {template_type}
 perturbation_types:
 {perturbations_str}
 """
@@ -110,7 +106,6 @@ if __name__ == "__main__":
     output_directory = args.output_dir
     random_seed = args.seed
     shuffles = args.n_shuffles
-    prompt_template = args.template_type
     perturbations = args.perturbation_types
     for project in pbar:
         pbar.set_description(f"Generating YML config for {project}")
@@ -121,7 +116,6 @@ if __name__ == "__main__":
             output_dir=output_directory,
             seed=random_seed,
             n_shuffles=shuffles,
-            template_type=prompt_template,
             perturbation_types=perturbations,
             output_filename=yml_file_name
         )
