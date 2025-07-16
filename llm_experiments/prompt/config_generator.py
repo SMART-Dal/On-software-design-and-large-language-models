@@ -108,7 +108,7 @@ if __name__ == "__main__":
         projects.add(project)
     
     pbar = tqdm(projects, desc="Generating YML configs")
-    output_directory = args.output_dir
+    output_directory = args.ymls_output_dir
     random_seed = args.seed
     shuffles = args.n_shuffles
     perturbations = args.perturbation_types
