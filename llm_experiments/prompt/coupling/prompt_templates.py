@@ -2,9 +2,9 @@ HYBRID_PROMPT =  """
 You are an expert software engineer that understands code quality. You are given a Java project named {project_name}. 
 ## Task:
 You will be given a list of Java classes and your task is to determine which classes they are tightly coupled with from a bigger list, if any. Tightly coupled classes are those with strong dependencies, where one or both classes rely heavily on the other, making them difficult to modify or test independently. The list of names of classes is as follows:
-
+```
 {classes_under_analysis}
-
+```
 At the end of the prompt, you will be provided with the body of all classes. You should analyze the code and determine which classes from the list below, are tightly coupled with those mentioned above. Note that you should NOT consider primitive types (e.g., int, float) as classes. You should only consider the classes that are provided in the list of class bodies below. For instance, if a class X has dependency with class Y, but class Y is not in the list of class bodies, you should not consider it as tightly coupled.
 
 ## Response Format:
@@ -62,9 +62,9 @@ BINARY_BASED_COUPLING = """
 You are an expert software engineer that understands code quality. You are given a Java project named {project_name}.
 ## Task:
 You will be given a list of pairs of Java classes and your task is to determine whether they are tightly coupled or not. Tightly coupled classes are those with strong dependencies, where one or both classes rely heavily on the other, making them difficult to modify or test independently. The list of pairs of classes is as follows:
-
+```
 {class_pair}
-
+```
 At the end of the prompt, you will be provided with the body of each class. You should analyze the code and determine whether the classes in each pair above are tightly coupled or not. Note that you should NOT consider primitive types (e.g., int, float) as classes. You should only consider the classes that are provided in the list of class bodies below. For instance, if a class X has dependency with class Y, but class Y is not in the list of class bodies, you should not consider it as tightly coupled.
 
 ## Response Format:
