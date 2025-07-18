@@ -15,7 +15,9 @@ from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BA
 from tqdm import tqdm
 
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
-TEMPLATES = ['retrieval', 'binary', 'hybrid']
+TEMPLATES = ['retrieval',
+            #   'binary', 'hybrid'
+              ]
 
 def calculate_iqr(data):
     q75, q25 = np.percentile(data, [75 ,25])
@@ -32,6 +34,7 @@ def clean_depedency(content, parser):
 def parser_args():
     parser = argparse.ArgumentParser(description='Generate a prompt for LLM with project context, perturbed classes, dependencies, and noise.')
     parser.add_argument('--config_file', type=str, required=True, help='Path to the config file.')
+    parser.add_argument('--with_iqr', action='store_true', help='Whether to use IQR to filter perturbed classes.')
     args = parser.parse_args()
 
     return args
@@ -122,9 +125,15 @@ def main():
         perturbed_data[key] = {'content': content, 'token_count': token_count, 'dependencies': new_value}
 
     perturbed_classes_token_counts = [value['token_count'] for value in perturbed_data.values()]
-    q25, q75 = calculate_iqr(perturbed_classes_token_counts)
-    # Filter out perturbed classes based on the IQR range
-    perturbed_classes = [key for key, value in perturbed_data.items() if q25 <= value['token_count'] <= q75]
+    if arguments.with_iqr:
+        # Calculate the IQR range of the perturbed classes token counts
+        q25, q75 = calculate_iqr(perturbed_classes_token_counts)
+        # Filter out perturbed classes based on the IQR range
+        perturbed_classes = [key for key, value in perturbed_data.items() if q25 <= value['token_count'] <= q75]
+    else:
+        # Use all perturbed classes
+        perturbed_classes = list(perturbed_data.keys())
+        q25, q75 = min(perturbed_classes_token_counts), max(perturbed_classes_token_counts)
     # Continue building the perturbed data by including the content of their dependencies and their inheritence chains
     tightly_coupeled_pairs = []
     collapsed_paths = {} # We will use this to avoid duplicate paths when picking noisy classes
