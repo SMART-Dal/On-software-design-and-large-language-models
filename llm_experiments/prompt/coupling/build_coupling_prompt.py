@@ -15,9 +15,7 @@ from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BA
 from tqdm import tqdm
 
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
-TEMPLATES = ['retrieval',
-            #   'binary', 'hybrid'
-              ]
+TEMPLATES = ['retrieval', 'binary', 'hybrid']
 
 def calculate_iqr(data):
     q75, q25 = np.percentile(data, [75 ,25])
