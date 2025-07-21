@@ -13,9 +13,14 @@ import tree_sitter_java as tsjava
 from tree_sitter import Language, Parser
 from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BASED_COUPLING, HYBRID_PROMPT
 from tqdm import tqdm
+import itertools
 
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
-TEMPLATES = ['retrieval', 'binary', 'hybrid']
+TEMPLATES = [
+    'retrieval', 
+    'binary', 
+    'hybrid'
+    ]
 
 def calculate_iqr(data):
     q75, q25 = np.percentile(data, [75 ,25])
@@ -37,47 +42,30 @@ def parser_args():
 
     return args
 
-def generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_classes):
-    # The distribution of "labels" where 0 refers to not coupled and 1 refers to coupled
-    # is determined by the same noise ratio. In other words, the dataset should be composed 
-    # of noise_ratio of 0s and (1 - noise_ratio) of 1s.
-    # First, we determine the number of loosely coupled classes that can be included in the prompt.
-    # tightly_coupeled_pairs currently holds the pairs of classes that are tightly coupled.
-    num_of_loosely_coupled_pairs = int(( noise_ratio * len(tightly_coupeled_pairs) )/ (1-noise_ratio) )
-    # If the number of the needed loosely coupled classes is less than n_noise_classes X n_noise_classes
-    # Then we can create samples from the noise_classes X tightly_coupeled_pairs space.
-    loosely_coupled_pairs_indices = list(range(len(noise_classes)))
-    # Shuffle the indices
-    random.shuffle(loosely_coupled_pairs_indices)
-    loosely_coupled_pairs = []
-    for i in range(0, len(loosely_coupled_pairs_indices), 2):
-        if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs: 
-            break
-        # Add the pair to the loosely coupled pairs
-        x, y = loosely_coupled_pairs_indices[i], loosely_coupled_pairs_indices[i+1]
-        left_class = noise_classes[x]['path'].split('/')[-1].split('.')[0]
-        right_class = noise_classes[y]['path'].split('/')[-1].split('.')[0]
-        loosely_coupled_pairs.append((left_class, right_class))
-    # Check if we reached the number of loosely coupled pairs that is needed. If
-    # not we can create ones by mixing loosely coupled pairs with tightly coupled pairs as follow
-    # [noisy_class1, perturbed_class1], [noisy_class2, perturbed_class2] ect until we reach the number of loosely coupled pairs
-    # # that is needed.
-    if len(loosely_coupled_pairs) < num_of_loosely_coupled_pairs:
-        for ns in noise_classes:
-            # Get the noisy class and the perturbed class
-            noisy_class = ns['path'].split('/')[-1].split('.')[0]
-            for p in tightly_coupeled_pairs:
-                # Check if the pair is already in the loosely coupled pairs
-                if (noisy_class, p[0]) in loosely_coupled_pairs or (p[0], noisy_class) in loosely_coupled_pairs:
-                    continue
-                # Add the pair to the loosely coupled pairs
-                loosely_coupled_pairs.append((noisy_class, p[0]))
-                if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs:
-                    break
-            if len(loosely_coupled_pairs) >= num_of_loosely_coupled_pairs:
-                break
+def generate_none_coupled_pairs(tightly_coupeled_pairs, noise_classes):
+    # The number of none coupled pairs == number of noise classes
+    num_of_none_coupled_pairs = len(noise_classes)
+    if num_of_none_coupled_pairs == 0:
+        print("No none coupled pairs needed. Returning empty list.")
+        return []
+    if num_of_none_coupled_pairs == 1:
+        # Randomly select a class from the tightly coupled pairs and use it to generate a noisy pair
+        random_class = random.choice(tightly_coupeled_pairs)
+        noise_class_name = noise_classes[0]['path'].split('/')[-1].split('.')[0]
+        return [(random_class[0], noise_class_name)]
+    
 
-    return loosely_coupled_pairs
+    noise_classes = list(map(lambda x: x['path'].split('/')[-1].split('.')[0], noise_classes))
+    none_coupled_pairs = []
+    all_possible_pairs = list(itertools.combinations(noise_classes, 2))
+    # Shuffle the pairs
+    try:
+        none_coupled_pairs = random.sample(all_possible_pairs, num_of_none_coupled_pairs)
+    except ValueError:
+        print(f"Not enough noise classes to generate {num_of_none_coupled_pairs} none coupled pairs. Using all possible pairs.")
+        none_coupled_pairs = all_possible_pairs
+
+    return none_coupled_pairs
 
 def main():
 
@@ -128,6 +116,9 @@ def main():
         q25, q75 = calculate_iqr(perturbed_classes_token_counts)
         # Filter out perturbed classes based on the IQR range
         perturbed_classes = [key for key, value in perturbed_data.items() if q25 <= value['token_count'] <= q75]
+        # If perturbed_classes is empty, use one perturbed class
+        if not perturbed_classes:
+            perturbed_classes = [list(perturbed_data.keys())[0]]
     else:
         # Use all perturbed classes
         perturbed_classes = list(perturbed_data.keys())
@@ -207,6 +198,7 @@ def main():
         print(f"Generating prompts for template: {template_name}")
         for noise_ratio in NOISE_RATIOS:
             n_noise_classes = int(noise_ratio * num_of_perturbed_classes / (1 - noise_ratio))
+            print(f"Number of noise classes: {n_noise_classes}, Noise ratio: {noise_ratio}")
             # Select the noise_classes-th classes given that noise_candidates are sorted by token count
             noise_classes = noise_candidates[:n_noise_classes]
             # Collect classes to include in the prompt
@@ -220,8 +212,8 @@ def main():
                 classes.append((path, content))
 
             if template_name == 'binary':
-                loosely_coupled_pairs = generate_loosely_coupled_pairs(noise_ratio, tightly_coupeled_pairs, noise_classes)
-                all_class_pairs = loosely_coupled_pairs + tightly_coupeled_pairs
+                non_coupeled_pairs = generate_none_coupled_pairs(tightly_coupeled_pairs, noise_classes)
+                all_class_pairs = non_coupeled_pairs + tightly_coupeled_pairs
 
             elif template_name == 'hybrid':
                 # Get the first element of each class pair of tightly_coupled_pairs
@@ -241,10 +233,10 @@ def main():
             
             
             elif template_name == 'binary':
-                print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of none coupled pairs: {len(loosely_coupled_pairs)}")
+                print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of none coupled pairs: {len(non_coupeled_pairs)}")
                 ground_truth_tightly_coupeled_pairs = [ {"pair": p, "coupled": True} for p in tightly_coupeled_pairs]
-                ground_truth_loosely_coupled_pairs = [ {"pair": p, "coupled": False} for p in loosely_coupled_pairs]
-                ground_truth = ground_truth_loosely_coupled_pairs + ground_truth_tightly_coupeled_pairs
+                ground_truth_non_coupeled_pairs = [ {"pair": p, "coupled": False} for p in non_coupeled_pairs]
+                ground_truth = ground_truth_non_coupeled_pairs + ground_truth_tightly_coupeled_pairs
 
             all_prompts = []
             # Generate a prompt for each shuffle
