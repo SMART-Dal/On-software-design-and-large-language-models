@@ -15,6 +15,7 @@ from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BA
 from tqdm import tqdm
 import itertools
 
+ALPHA = 0.5
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
 TEMPLATES = [
     'retrieval', 
@@ -22,10 +23,10 @@ TEMPLATES = [
     'hybrid'
     ]
 
-def calculate_iqr(data):
-    q75, q25 = np.percentile(data, [75 ,25])
-    
-    return q25, q75
+def calculate_range(data):
+    mean = np.mean(data)
+    std = np.std(data)
+    return mean, std
 
 
 def clean_depedency(content, parser):
@@ -94,6 +95,8 @@ def main():
     # In some cases, the class might be defined within another class. For instance Foo$Bar, the class Bar will be in Foo.java and not Bar.java
     print("Fixing nested class paths in the perturbed data...")
     raw_perturbed_data = {key: fix_nested_class_paths(value) for key, value in raw_perturbed_data.items()}
+    print("Fixing nested class paths in the disjoint pairs...")
+    raw_disjoint_pairs = fix_nested_class_paths(raw_disjoint_pairs)
     # Set the IQR range based on the token length of the perturbed classes. This range will be used to select noisy classes as well.
     perturbed_data = {}
     for key, value in tqdm(raw_perturbed_data.items(), desc='Reading perturbed classes to determine IQR range'):
@@ -113,16 +116,17 @@ def main():
     perturbed_classes_token_counts = [value['token_count'] for value in perturbed_data.values()]
     if arguments.with_iqr:
         # Calculate the IQR range of the perturbed classes token counts
-        q25, q75 = calculate_iqr(perturbed_classes_token_counts)
+        mean, std = calculate_range(perturbed_classes_token_counts)
+        lower_bound = mean - ALPHA * std
+        upper_bound = mean + ALPHA * std
         # Filter out perturbed classes based on the IQR range
-        perturbed_classes = [key for key, value in perturbed_data.items() if q25 <= value['token_count'] <= q75]
+        perturbed_classes = [key for key, value in perturbed_data.items() if lower_bound <= value['token_count'] <= upper_bound]
         # If perturbed_classes is empty, use all perturbed classes
         if not perturbed_classes:
             perturbed_classes = list(perturbed_data.keys())
     else:
         # Use all perturbed classes
         perturbed_classes = list(perturbed_data.keys())
-        q25, q75 = min(perturbed_classes_token_counts), max(perturbed_classes_token_counts)
     # Continue building the perturbed data by including the content of their dependencies and their inheritence chains
     tightly_coupeled_pairs = []
     collapsed_paths = {} # We will use this to avoid duplicate paths when picking noisy classes
@@ -154,6 +158,7 @@ def main():
         
     num_of_perturbed_classes = len(collapsed_paths)
     noise_candidates = {}
+    noise_candidates_lengths = []
     for pair in tqdm(raw_disjoint_pairs, desc='Collecting noise candidates from disjoint pairs'):
         left_path = pair['left']['filePath']
         right_path = pair['right']['filePath']
@@ -164,14 +169,13 @@ def main():
                 continue
             content = remove_comments_and_docstrings(content)
             token_count = len(tokenizer.encode(content).ids)
-            if q25 <= token_count <= q75:
-                lefClassName = pair['left']['className'].split('.')[-1]
-                # Check if the dollar sign is in the class name, if so, it means it is an inner class
-                if '$' in lefClassName:
-                    lefClassName = lefClassName.split('$')[-1]
-                noise_candidates[left_path] = {'content': content, 'className': lefClassName , 'token_count': token_count}
-            else:
-                continue
+            noise_candidates_lengths.append(token_count)
+            lefClassName = pair['left']['className'].split('.')[-1]
+            # Check if the dollar sign is in the class name, if so, it means it is an inner class
+            if '$' in lefClassName:
+                lefClassName = lefClassName.split('$')[-1]
+            noise_candidates[left_path] = {'content': content, 'className': lefClassName , 'token_count': token_count}
+
         
         if (right_path not in collapsed_paths):
             full_right_path = os.path.join(args.noisy_project_path, right_path)
@@ -180,16 +184,23 @@ def main():
                 continue
             content = remove_comments_and_docstrings(content)
             token_count = len(tokenizer.encode(content).ids)
-            if q25 <= token_count <= q75:
-                rightClassName = pair['right']['className'].split('.')[-1]
-                # Check if the dollar sign is in the class name, if so, it means it is an inner class
-                if '$' in rightClassName:
-                    rightClassName = rightClassName.split('$')[-1]
-                noise_candidates[right_path] = {'content': content, 'className': rightClassName , 'token_count': token_count}
-            else:
-                continue
+            noise_candidates_lengths.append(token_count)
+            rightClassName = pair['right']['className'].split('.')[-1]
+            # Check if the dollar sign is in the class name, if so, it means it is an inner class
+            if '$' in rightClassName:
+                rightClassName = rightClassName.split('$')[-1]
+            noise_candidates[right_path] = {'content': content, 'className': rightClassName , 'token_count': token_count}
+
     # Revert the dictionary to a list
     noise_candidates = [{'path': k, 'content': v['content'], 'className': v['className'], 'token_count': v['token_count']} for k, v in noise_candidates.items()]
+    if arguments.with_iqr:
+        # Calculate the IQR range of the noise candidates token counts
+        mean_noise, std_noise = calculate_range(noise_candidates_lengths)
+        lower_bound_noise = mean_noise - ALPHA * std_noise
+        upper_bound_noise = mean_noise + ALPHA * std_noise
+        # Filter out noise candidates based on the IQR range
+        noise_candidates = [n for n in noise_candidates if lower_bound_noise <= n['token_count'] <= upper_bound_noise]
+    print(f"Number of noise candidates: {len(noise_candidates)}")
     # Sort noise candidates by token count in ascending order
     noise_candidates = sorted(noise_candidates, key=lambda x: x['token_count'])
     # Noise ratio: (normal classes) / total classes where total classes = normal classes + perturbed classes + perturbed classes's dependencies + dep_chain of each dependency
@@ -198,7 +209,6 @@ def main():
         print(f"Generating prompts for template: {template_name}")
         for noise_ratio in NOISE_RATIOS:
             n_noise_classes = int(noise_ratio * num_of_perturbed_classes / (1 - noise_ratio))
-            print(f"Number of noise classes: {n_noise_classes}, Noise ratio: {noise_ratio}")
             # Select the noise_classes-th classes given that noise_candidates are sorted by token count
             noise_classes = noise_candidates[:n_noise_classes]
             # Collect classes to include in the prompt
@@ -210,6 +220,8 @@ def main():
             
             for path, content in collapsed_paths.items():
                 classes.append((path, content))
+            
+            print(f"Number of classes in the prompt: {len(classes)}, Number of perturbed classes: {num_of_perturbed_classes}, Number of noisy classes: {len(noise_classes)}, Noise ratio: {noise_ratio}")
 
             if template_name == 'binary':
                 non_coupeled_pairs = generate_none_coupled_pairs(tightly_coupeled_pairs, noise_classes)
@@ -276,11 +288,10 @@ def main():
                         list_of_classes=classes_str
                     )
 
-                len_prompt = len(tokenizer.encode(prompt).ids)
-                # Future idea: Randomly remove the body of classes in the prompt to make it more challenging
-                print(f"Number of involved classes: {len(classes)}, Prompt token count: {len_prompt}, R={noise_ratio}, S={shuff}")
                 all_prompts.append(prompt)
                 if shuff == args.n_shuffles - 1:
+                    len_prompt = len(tokenizer.encode(all_prompts[0]).ids)
+                    print(f"Number of involved classes: {len(classes)}, # Perturbed classes {num_of_perturbed_classes}, # Noisy classes {n_noise_classes}, Prompt token count: {len_prompt}, R={noise_ratio}, S={shuff}")
                     metadata = {
                         'noise_ratio': noise_ratio,
                         'n_perturbed_classes': num_of_perturbed_classes,
