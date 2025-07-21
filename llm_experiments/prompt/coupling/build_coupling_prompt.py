@@ -116,9 +116,9 @@ def main():
         q25, q75 = calculate_iqr(perturbed_classes_token_counts)
         # Filter out perturbed classes based on the IQR range
         perturbed_classes = [key for key, value in perturbed_data.items() if q25 <= value['token_count'] <= q75]
-        # If perturbed_classes is empty, use one perturbed class
+        # If perturbed_classes is empty, use all perturbed classes
         if not perturbed_classes:
-            perturbed_classes = [list(perturbed_data.keys())[0]]
+            perturbed_classes = list(perturbed_data.keys())
     else:
         # Use all perturbed classes
         perturbed_classes = list(perturbed_data.keys())
