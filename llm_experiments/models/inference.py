@@ -1,15 +1,38 @@
-import time
+from glob import iglob
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 from argparse import ArgumentParser
 from typing import List, Union
-from utils.io import get_all_files, read_file_content, save_to_json
+from utils.io import get_all_files, read_file_content, save_to_json, read_json_file
 from tqdm import tqdm
 from transformers import AutoTokenizer
+import numpy as np
 import os
 
-MAX_TOKENS = 8_192
-TEMPEATURE = 0 # Based on the recommendation of: https://api-docs.deepseek.com/quick_start/parameter_settings
+TEMPEATURE = 0
+TEMPLATE_TYPES = ["hybrid", "retrieval", "binary"]
+NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
+TOKENIZER = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+
+def _beautify_project_name(path: str):
+    project_name = path.split(os.sep)[-3]
+    return project_name
+
+def calculate_iqr(data):
+    q75, q25 = np.percentile(data, [75 ,25])
+    
+    return q25, q75
+
+def fetch_by_noise_ratio(dataset, noise_ratio):
+    """Fetch dataset entries by noise ratio"""
+    if noise_ratio not in NOISE_RATIOS:
+        raise ValueError(f"Noise ratio {noise_ratio} is not supported. Supported ratios are: {NOISE_RATIOS}")
+    
+    filtered_dataset = []
+    for entry in dataset:
+        filtered_dataset.append(entry[noise_ratio])
+    
+    return filtered_dataset
 
 def is_already_processed(output_dir, input_file):
     """Check if a response file already exists for this input file"""
@@ -73,10 +96,11 @@ def execute_prompt(client: OpenAI, tokenizer: AutoTokenizer, ctx_len: int , mode
 
 def parse_args():
     parser = ArgumentParser(description="Parse model type and API key.")
-    parser.add_argument("--model_type", type=str, required=True, help="Type of model to use (openai or deepseek).", choices=["openai", "deepseek", "together_ai"])
+    parser.add_argument("--model_type", type=str, required=True, help="Type of model to use (openai or deepseek).", choices=["openai", "deepseek", "together_ai", "openrouter"])
     parser.add_argument("--reasoning", action="store_true", help="Indicate whether this is a reasoning model or not.")
     parser.add_argument("--model_name", type=str, required=True, help="Name of the model to use. Example: gpt-3.5-turbo, deepseek-reaonser.")
-    parser.add_argument("--prompts_folder", type=str, required=True, help="Path to the folder containing prompt files.")
+    parser.add_argument("--max_tokens", type=int, default=4096, help="Maximum number of tokens for the model. Default is 4096.")
+    parser.add_argument("--prompts_folder", type=str, required=True, help="Path to the folder containing dataset files.")
     parser.add_argument("--output_folder", type=str, required=True, help="Path to the folder where output files will be saved.")
     args = parser.parse_args()
     return args
@@ -87,32 +111,58 @@ if __name__ == "__main__":
     model_type = args.model_type
     model_name = args.model_name
     prompts_folder = args.prompts_folder
+    max_tokens = args.max_tokens
     output_folder = args.output_folder
-    # Extract the folder name from the prompts_folder and create it inside the output_folder
-    basename = os.path.basename(prompts_folder)
-    output_folder = os.path.join(output_folder, basename)
-    # Create the output folder if it doesn't exist
-    os.makedirs(output_folder, exist_ok=True)
+    reasoning = args.reasoning
 
     client = return_client(model_type)
-    reasoning = True if args.reasoning else False
+    hf_tokenizer = AutoTokenizer.from_pretrained(TOKENIZER)
 
-    # Read prompts from the prompts_folder
-    prompts = get_all_files(prompts_folder)
-    # Only keep txt files
-    prompts = [p for p in prompts if p.endswith(".txt")]
-    # Filter out already processed files
-    filtered_prompts = [p for p in prompts if not is_already_processed(output_folder, p)]
-    print(f"Found {len(filtered_prompts)} prompts to process out of total {len(prompts)}.")
-    pbar = tqdm(filtered_prompts, desc="Processing prompts", unit="file")
-    for p_path in pbar:
-        prompt_name = os.path.basename(p_path)
-        prompt_content, _ = read_file_content(p_path)
-        
-        pbar.set_description(f"Processing {prompt_name}")
-        # Execute the prompt
-        response = execute_prompt(client, model_name, reasoning, prompt_content)
-        # Save the response to the output folder
-        output_file = os.path.join(output_folder, f"{prompt_name}_response.json")
-        save_to_json(response, output_file)
-        print(f"Response for {prompt_name} saved to {output_file}")
+    # Create master dataset with keys being the project's name
+    for prompt_method in TEMPLATE_TYPES:
+        # Load all JSON files
+        datasets = list(iglob(os.path.join(prompts_folder, f"**/{prompt_method}/dataset.json"), recursive=True))
+        # Read the JSON files
+        raw_datasets = {_beautify_project_name(dataset): read_json_file(dataset) for dataset in datasets} 
+        # Execute for each noise ratio
+        for nr in NOISE_RATIOS:
+            # Get IQR range
+            all_prompts = fetch_by_noise_ratio(raw_datasets.values(), nr)
+            all_prompts = list(map(lambda x: x["prompts"], all_prompts))
+            # Flatten the list of prompts
+            all_prompts = [item for sublist in all_prompts for item in sublist]
+            # Map prompt -> length
+            prompt_lengths = list(map(lambda x: len(hf_tokenizer.tokenize(x)), all_prompts))
+            q25, q75 = calculate_iqr(prompt_lengths)
+            print(f"Noise Ratio: {nr}, Q25: {q25}, Q75: {q75}")
+            # Iterate over each prompt
+            for project, dataset in tqdm(raw_datasets.items(), desc=f"Processing {prompt_method} prompts for noise ratio {nr}"):
+                prompts = dataset[nr]["prompts"]
+                # Only use those whose length is within the IQR range
+                prompts = [p for p in prompts if q25 <= len(hf_tokenizer.tokenize(p)) <= q75]
+                if not prompts:
+                    print(f"No prompts found for project {project} with noise ratio {nr}. Skipping.")
+                    continue
+                # Create output folder if it doesn't exist
+                output_folder = os.path.join(output_folder, project, prompt_method, nr)
+                # Check if the output folder exists. If it does, the prompts have already been processed
+                if not os.path.exists(output_folder):
+                    os.makedirs(output_folder)
+                else:
+                    print(f"Output folder {output_folder} already exists. Skipping processing for this project and noise ratio.")
+                    continue
+                # Prompt the model using the prompts
+                for prompt in tqdm(prompts, desc=f"Processing prompts for project {project} with noise ratio {nr}"):
+                    response = execute_prompt(client, hf_tokenizer, max_tokens, model_name, reasoning, prompt)
+                    if response:
+                        # Save the response and the original prompts and their metadata to a JSON file
+                        data = {
+                            'metadata': dataset[nr]["metadata"], 
+                            "prompts":  dataset[nr]["prompts"],
+                            'response': response,
+                            'ground_truth': dataset[nr]["ground_truth"],
+                            }
+                        output_path = os.path.join(output_folder, f"response.json")
+                        save_to_json(data, output_path)
+                    else:
+                        print(f"Failed to process prompt: {prompt}")
