@@ -10,18 +10,20 @@ import numpy as np
 import os
 
 TEMPEATURE = 0
+ALPHA = 1
 TEMPLATE_TYPES = ["hybrid", "retrieval", "binary"]
 NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
 TOKENIZER = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 
 def _beautify_project_name(path: str):
     project_name = path.split(os.sep)[-3]
+    project_name = project_name.split("_")[0]
     return project_name
 
-def calculate_iqr(data):
-    q75, q25 = np.percentile(data, [75 ,25])
+def calculate_range(data):
+    mean, std = np.mean(data), np.std(data)
     
-    return q25, q75
+    return mean, std
 
 def fetch_by_noise_ratio(dataset, noise_ratio):
     """Fetch dataset entries by noise ratio"""
@@ -30,7 +32,7 @@ def fetch_by_noise_ratio(dataset, noise_ratio):
     
     filtered_dataset = []
     for entry in dataset:
-        filtered_dataset.append(entry[noise_ratio])
+        filtered_dataset.append(entry[str(noise_ratio)])
     
     return filtered_dataset
 
@@ -99,7 +101,7 @@ def parse_args():
     parser.add_argument("--model_type", type=str, required=True, help="Type of model to use (openai or deepseek).", choices=["openai", "deepseek", "together_ai", "openrouter"])
     parser.add_argument("--reasoning", action="store_true", help="Indicate whether this is a reasoning model or not.")
     parser.add_argument("--model_name", type=str, required=True, help="Name of the model to use. Example: gpt-3.5-turbo, deepseek-reaonser.")
-    parser.add_argument("--max_tokens", type=int, default=4096, help="Maximum number of tokens for the model. Default is 4096.")
+    parser.add_argument("--max_tokens", type=float, default=4096, help="Maximum number of tokens for the model. Default is 4096.")
     parser.add_argument("--prompts_folder", type=str, required=True, help="Path to the folder containing dataset files.")
     parser.add_argument("--output_folder", type=str, required=True, help="Path to the folder where output files will be saved.")
     args = parser.parse_args()
@@ -111,7 +113,7 @@ if __name__ == "__main__":
     model_type = args.model_type
     model_name = args.model_name
     prompts_folder = args.prompts_folder
-    max_tokens = args.max_tokens
+    max_tokens = int(args.max_tokens)
     output_folder = args.output_folder
     reasoning = args.reasoning
 
@@ -132,19 +134,18 @@ if __name__ == "__main__":
             # Flatten the list of prompts
             all_prompts = [item for sublist in all_prompts for item in sublist]
             # Map prompt -> length
+            print(f"Calculating IQR range for noise ratio {nr} and prompt method {prompt_method}...")
             prompt_lengths = list(map(lambda x: len(hf_tokenizer.tokenize(x)), all_prompts))
-            q25, q75 = calculate_iqr(prompt_lengths)
-            print(f"Noise Ratio: {nr}, Q25: {q25}, Q75: {q75}")
+            mean, std = calculate_range(prompt_lengths)
+            # lower_bound = mean - ALPHA * std
+            # upper_bound = mean + ALPHA * std
+            lower_bound = 0
+            upper_bound = mean
             # Iterate over each prompt
-            for project, dataset in tqdm(raw_datasets.items(), desc=f"Processing {prompt_method} prompts for noise ratio {nr}"):
-                prompts = dataset[nr]["prompts"]
-                # Only use those whose length is within the IQR range
-                prompts = [p for p in prompts if q25 <= len(hf_tokenizer.tokenize(p)) <= q75]
-                if not prompts:
-                    print(f"No prompts found for project {project} with noise ratio {nr}. Skipping.")
-                    continue
+            for project, dataset in tqdm(raw_datasets.items()):
+                prompts = dataset[str(nr)]["prompts"]
                 # Create output folder if it doesn't exist
-                output_folder = os.path.join(output_folder, project, prompt_method, nr)
+                output_folder = os.path.join(output_folder, project, prompt_method, str(nr))
                 # Check if the output folder exists. If it does, the prompts have already been processed
                 if not os.path.exists(output_folder):
                     os.makedirs(output_folder)
@@ -157,10 +158,10 @@ if __name__ == "__main__":
                     if response:
                         # Save the response and the original prompts and their metadata to a JSON file
                         data = {
-                            'metadata': dataset[nr]["metadata"], 
-                            "prompts":  dataset[nr]["prompts"],
+                            'metadata': dataset[str(nr)]["metadata"], 
+                            "prompts":  dataset[str(nr)]["prompts"],
                             'response': response,
-                            'ground_truth': dataset[nr]["ground_truth"],
+                            'ground_truth': dataset[str(nr)]["ground_truth"],
                             }
                         output_path = os.path.join(output_folder, f"response.json")
                         save_to_json(data, output_path)
