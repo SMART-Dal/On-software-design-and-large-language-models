@@ -121,6 +121,7 @@ def main():
     perturbed_classes_token_counts = [value['token_count'] for value in perturbed_data.values()]
     if arguments.with_iqr:
         # Calculate the IQR range of the perturbed classes token counts
+        print("Calculating IQR range for perturbed classes...")
         mean, std = calculate_range(perturbed_classes_token_counts)
         lower_bound = mean - ALPHA * std
         upper_bound = mean + ALPHA * std
@@ -205,6 +206,7 @@ def main():
     noise_candidates = [{'path': k, 'content': v['content'], 'className': v['className'], 'token_count': v['token_count']} for k, v in noise_candidates.items()]
     if arguments.with_iqr:
         # Calculate the IQR range of the noise candidates token counts
+        print("Calculating IQR range for noise candidates...")
         mean_noise, std_noise = calculate_range(noise_candidates_lengths)
         lower_bound_noise = mean_noise - ALPHA * std_noise
         upper_bound_noise = mean_noise + ALPHA * std_noise
