@@ -66,7 +66,7 @@ def find_method_bodies_recursive(node, nodes_to_replace):
         find_method_bodies_recursive(child, nodes_to_replace)
 
 
-def remove_method_bodies(code: str, parser: Parser) -> str:
+def remove_method_bodies(code: str, parser: Parser, verbose: bool = False) -> str:
     """
     Removes the bodies of all methods in a Java code string by iterating
     through the syntax tree and identifying nodes of type 'method_declaration'.
@@ -89,8 +89,8 @@ def remove_method_bodies(code: str, parser: Parser) -> str:
     # Find all method body nodes using the recursive traversal function
     nodes_to_replace = []
     find_method_bodies_recursive(root_node, nodes_to_replace)
-
-    print(f"Diagnostic: Found {len(nodes_to_replace)} method bodies to replace.")
+    if verbose:
+        print(f"Diagnostic: Found {len(nodes_to_replace)} method bodies to replace.")
 
     # If no method bodies were found, return the original code
     if not nodes_to_replace:
