@@ -8,7 +8,7 @@ from tokenizers import Tokenizer
 from utils.io import read_json_file, read_file_content, save_config_to_yaml, save_to_json, parse_yaml_config
 from utils.paths import get_absolute_file_paths
 from utils.preprocessing import remove_comments_and_docstrings, fix_nested_class_paths
-from utils.tree_sitter_utils import remove_class_bodies
+from utils.tree_sitter_utils import remove_class_bodies, remove_method_bodies
 import tree_sitter_java as tsjava
 from tree_sitter import Language, Parser
 from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BASED_COUPLING, HYBRID_PROMPT
@@ -29,9 +29,12 @@ def calculate_range(data):
     return mean, std
 
 
-def clean_depedency(content, parser):
+def clean_depedency(content, parser, remove_method_bodies=True):
     code = remove_comments_and_docstrings(content)
-    code = remove_class_bodies(code, parser)
+    if remove_method_bodies:
+        code = remove_method_bodies(code, parser)
+    else:
+        code = remove_class_bodies(code, parser)
 
     return code
 
@@ -39,6 +42,7 @@ def parser_args():
     parser = argparse.ArgumentParser(description='Generate a prompt for LLM with project context, perturbed classes, dependencies, and noise.')
     parser.add_argument('--config_file', type=str, required=True, help='Path to the config file.')
     parser.add_argument('--with_iqr', action='store_true', help='Whether to use IQR to filter perturbed classes.')
+    parser.add_argument('--rm_bodies', action='store_true', help='Whether to remove method bodies (not constructor).')
     args = parser.parse_args()
 
     return args
@@ -97,7 +101,6 @@ def main():
     raw_perturbed_data = {key: fix_nested_class_paths(value) for key, value in raw_perturbed_data.items()}
     print("Fixing nested class paths in the disjoint pairs...")
     raw_disjoint_pairs = fix_nested_class_paths(raw_disjoint_pairs)
-    # Set the IQR range based on the token length of the perturbed classes. This range will be used to select noisy classes as well.
     perturbed_data = {}
     for key, value in tqdm(raw_perturbed_data.items(), desc='Reading perturbed classes to determine IQR range'):
         full_path = os.path.join(args.perturbed_project_path, key)
@@ -110,6 +113,8 @@ def main():
             if len(v['dependencyChain']) > 1:
                 new_value.append(v)
         content = remove_comments_and_docstrings(content)
+        if arguments.rm_bodies:
+            content = remove_method_bodies(content, parser)
         token_count = len(tokenizer.encode(content).ids)
         perturbed_data[key] = {'content': content, 'token_count': token_count, 'dependencies': new_value}
 
@@ -140,7 +145,7 @@ def main():
             dep_content, readable = read_file_content(dep_path)
             if not readable:
                 continue
-            dep_content = clean_depedency(dep_content, parser)
+            dep_content = clean_depedency(dep_content, parser, remove_method_bodies=arguments.rm_bodies)
             collapsed_paths[dep['dependencyClassFilePath']] = dep_content
             # Interate over the dependency chain
             dependency_class_name = dep['dependencyClassName'].split('.')[-1]
@@ -153,7 +158,8 @@ def main():
                     continue
                 if chain_entry['className'] == dependency_class_name:
                     continue
-                chain_content = clean_depedency(chain_content, parser)
+                
+                chain_content = clean_depedency(chain_content, parser, remove_method_bodies=arguments.rm_bodies)
                 collapsed_paths[chain_entry['filePath']] = chain_content
         
     num_of_perturbed_classes = len(collapsed_paths)
@@ -168,6 +174,8 @@ def main():
             if not readable:
                 continue
             content = remove_comments_and_docstrings(content)
+            if arguments.rm_bodies:
+                content = remove_method_bodies(content, parser)
             token_count = len(tokenizer.encode(content).ids)
             noise_candidates_lengths.append(token_count)
             lefClassName = pair['left']['className'].split('.')[-1]
@@ -183,6 +191,8 @@ def main():
             if not readable:
                 continue
             content = remove_comments_and_docstrings(content)
+            if arguments.rm_bodies:
+                content = remove_method_bodies(content, parser)
             token_count = len(tokenizer.encode(content).ids)
             noise_candidates_lengths.append(token_count)
             rightClassName = pair['right']['className'].split('.')[-1]
