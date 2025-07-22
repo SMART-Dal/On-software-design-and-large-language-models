@@ -29,9 +29,9 @@ def calculate_range(data):
     return mean, std
 
 
-def clean_depedency(content, parser, remove_method_bodies=True):
+def clean_depedency(content, parser, _remove_method_bodies=True):
     code = remove_comments_and_docstrings(content)
-    if remove_method_bodies:
+    if _remove_method_bodies:
         code = remove_method_bodies(code, parser)
     else:
         code = remove_class_bodies(code, parser)
@@ -146,7 +146,7 @@ def main():
             dep_content, readable = read_file_content(dep_path)
             if not readable:
                 continue
-            dep_content = clean_depedency(dep_content, parser, remove_method_bodies=arguments.rm_bodies)
+            dep_content = clean_depedency(dep_content, parser, _remove_method_bodies=arguments.rm_bodies)
             collapsed_paths[dep['dependencyClassFilePath']] = dep_content
             # Interate over the dependency chain
             dependency_class_name = dep['dependencyClassName'].split('.')[-1]
@@ -160,7 +160,7 @@ def main():
                 if chain_entry['className'] == dependency_class_name:
                     continue
                 
-                chain_content = clean_depedency(chain_content, parser, remove_method_bodies=arguments.rm_bodies)
+                chain_content = clean_depedency(chain_content, parser, _remove_method_bodies=arguments.rm_bodies)
                 collapsed_paths[chain_entry['filePath']] = chain_content
         
     num_of_perturbed_classes = len(collapsed_paths)
