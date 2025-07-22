@@ -83,7 +83,7 @@ def remove_method_bodies(code: str, parser: Parser, verbose: bool = False) -> st
     root_node = tree.root_node
 
     # Check for parsing errors
-    if root_node.has_error:
+    if root_node.has_error and verbose:
         print("Warning: Tree-sitter detected syntax errors in the provided Java code.")
 
     # Find all method body nodes using the recursive traversal function
