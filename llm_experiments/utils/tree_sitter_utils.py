@@ -1,4 +1,5 @@
-from tree_sitter import Parser, Language
+from tree_sitter import Parser, Language, Node
+from typing import Set, List
 import tree_sitter_java as tsjava
 
 def remove_class_bodies(code: str, parser: Parser) -> str:
@@ -40,46 +41,71 @@ def remove_class_bodies(code: str, parser: Parser) -> str:
     # Decode the modified bytes back to a string
     return modified_code_bytes.decode('utf8')
 
-def find_method_bodies_recursive(node, nodes_to_replace):
+def find_method_bodies_recursive(
+    node: Node,
+    code_bytes: bytes,
+    excluded_methods: Set[str],
+    nodes_to_replace: List[Node]
+):
     """
-    Recursively traverses the syntax tree to find method bodies.
+    Recursively traverses the syntax tree to find method bodies, excluding
+    methods whose names are in the exclusion set.
 
-    Args:
-        node: The current tree-sitter Node to inspect.
-        nodes_to_replace: A list to append found method body nodes to.
+    This function uses `child_by_field_name` for robustly finding the name
+    and body of a method.
     """
-    # If the node is a method declaration, we've found what we're looking for.
+    # If the current node is a method declaration, we process it.
     if node.type == 'method_declaration':
-        # The body of a method is typically a 'block' node. We find it among
-        # the children of the method_declaration node.
-        for child in node.children:
-            if child.type == 'block':
-                nodes_to_replace.append(child)
-                # Once we find the body, we don't need to check other children
-                # of this method, so we stop the inner loop.
-                break
-        # We don't recurse further into the method_declaration itself.
+        name_node = node.child_by_field_name('name')
+        body_node = node.child_by_field_name('body')
+
+        # Proceed only if both name and body are found
+        if name_node and body_node:
+            # Extract the method name as a string
+            method_name = code_bytes[name_node.start_byte:name_node.end_byte].decode('utf8')
+            
+            # If the method name is NOT in the exclusion set, add its body
+            # to the list of nodes that need to be replaced.
+            if method_name not in excluded_methods:
+                nodes_to_replace.append(body_node)
+        
+        # We have processed this method declaration, so we don't need to
+        # recurse into its children. We will continue the traversal with
+        # its siblings in the parent's loop.
         return
 
-    # If the current node is not a method, continue traversing its children.
+    # For any other node type, continue the traversal with its children.
     for child in node.children:
-        find_method_bodies_recursive(child, nodes_to_replace)
+        find_method_bodies_recursive(child, code_bytes, excluded_methods, nodes_to_replace)
 
 
-def remove_method_bodies(code: str, parser: Parser, verbose: bool = False) -> str:
+def remove_method_bodies(
+    code: str,
+    parser: Parser,
+    excluded_methods: Set[str] = None,
+    verbose: bool = False
+) -> str:
     """
-    Removes the bodies of all methods in a Java code string by iterating
-    through the syntax tree and identifying nodes of type 'method_declaration'.
+    Removes the bodies of methods in a Java code string, with an option to exclude
+    certain methods from this process using recursive tree traversal.
 
     Args:
         code: A string containing the Java source code.
         parser: A tree-sitter Parser instance configured for Java.
+        excluded_methods: A set of method names (as strings) that should NOT have
+                          their bodies replaced.
+        verbose: If True, prints diagnostic information to the console.
 
     Returns:
-        A string containing the skeletonized Java code.
+        A string containing the Java code with specified method bodies replaced.
     """
-    # Parse the source code into a syntax tree
-    tree = parser.parse(bytes(code, "utf8"))
+    # Ensure excluded_methods is a set for efficient lookup
+    if excluded_methods is None:
+        excluded_methods = set()
+
+    # Convert code to bytes for parsing and slicing
+    code_bytes = bytes(code, "utf8")
+    tree = parser.parse(code_bytes)
     root_node = tree.root_node
 
     # Check for parsing errors
@@ -88,7 +114,8 @@ def remove_method_bodies(code: str, parser: Parser, verbose: bool = False) -> st
 
     # Find all method body nodes using the recursive traversal function
     nodes_to_replace = []
-    find_method_bodies_recursive(root_node, nodes_to_replace)
+    find_method_bodies_recursive(root_node, code_bytes, excluded_methods, nodes_to_replace)
+
     if verbose:
         print(f"Diagnostic: Found {len(nodes_to_replace)} method bodies to replace.")
 
@@ -96,8 +123,8 @@ def remove_method_bodies(code: str, parser: Parser, verbose: bool = False) -> st
     if not nodes_to_replace:
         return code
 
-    # Convert the source code to a byte array for efficient modification
-    code_bytes = bytearray(code, "utf8")
+    # Use a bytearray for efficient modification
+    code_bytearray = bytearray(code_bytes)
     placeholder = b"{ /* ... method body omitted ... */ }"
 
     # Iterate over the found nodes in REVERSE order to avoid messing up
@@ -105,10 +132,10 @@ def remove_method_bodies(code: str, parser: Parser, verbose: bool = False) -> st
     for node in reversed(nodes_to_replace):
         start = node.start_byte
         end = node.end_byte
-        code_bytes[start:end] = placeholder
+        code_bytearray[start:end] = placeholder
 
     # Decode the modified byte array back into a string and return it.
-    return code_bytes.decode("utf8")
+    return code_bytearray.decode("utf8")
 
 
 if __name__ == "__main__":
@@ -146,7 +173,7 @@ public class Bar {
         return "Done";
     }
 
-    // The body of this simple getter should also be REMOVED.
+    // The body of this simple getter that should NOT be removed.
     public String getName() {
         return this.name;
     }
@@ -162,7 +189,7 @@ public class Bar {
     print("--- Original Code ---")
     print(java_code_example)
 
-    skeleton_code = remove_method_bodies(java_code_example, parser)
+    skeleton_code = remove_method_bodies(java_code_example, parser, excluded_methods={"getName"})
 
     print("\n--- Skeletonized Code ---")
     print(skeleton_code)
