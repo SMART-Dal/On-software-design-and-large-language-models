@@ -56,6 +56,7 @@ public class Main {
 
         boolean isDiD = false;
         boolean isUiD = false;
+        boolean isFMO = false;
         boolean dontRebuild = false;
         for (String transformation : transformations) {
             switch (transformation.trim().toLowerCase()) {
@@ -84,6 +85,11 @@ public class Main {
                 case "disableabstraction":
                     System.out.println("Applying Disable Abstraction transformation...");
                     launcher.addProcessor(new DisableAbstractionProcessor());
+                    break;
+                case "factorymethodobfuscator":
+                    System.out.println("Applying Factory Method Obfuscator transformation...");
+                    launcher.addProcessor(new FactoryMethodObfuscator());
+                    isFMO = true;
                     break;
                 case "godclass":
                     System.out.println("Applying God Class transformation...");
@@ -139,6 +145,20 @@ public class Main {
                     modifiedCallers,
                     modifiedClasses,
                     "uid",
+                    inputFolderName,
+                    outputPath
+            );
+        }
+
+        if (isFMO) {
+            modifiedCalless = FactoryMethodObfuscator.modifiedCallees.entrySet();
+            modifiedCallers = FactoryMethodObfuscator.modifiedCallers.entrySet();
+            modifiedClasses = FactoryMethodObfuscator.modifiedClasses;
+            SetUtils.processModifiedClasses(
+                    modifiedCalless,
+                    modifiedCallers,
+                    modifiedClasses,
+                    "fmo",
                     inputFolderName,
                     outputPath
             );
