@@ -15,337 +15,287 @@ from prompt.coupling.prompt_templates import RETRIEVAL_BASED_COUPLING, BINARY_BA
 from tqdm import tqdm
 import itertools
 
+# --- Constants ---
 ALPHA = 0.5
-NOISE_RATIOS = [round(i*1e-1, 1) for i in range(1, 9)]
+NOISE_RATIOS = [round(i * 1e-1, 1) for i in range(1, 9)]
 TEMPLATES = [
-    'retrieval', 
-    'binary', 
+    'retrieval',
+    'binary',
     'hybrid'
-    ]
+]
 
+# --- Helper Functions (Unchanged) ---
 def calculate_range(data):
+    """Calculates the mean and standard deviation of a list of numbers."""
     mean = np.mean(data)
     std = np.std(data)
     return mean, std
 
-
-def clean_depedency(content, parser, _remove_method_bodies=True):
+def clean_dependency(content, parser, _remove_method_bodies=True):
+    """Cleans the java code by removing comments, docstrings, and optionally method/class bodies."""
     code = remove_comments_and_docstrings(content)
     if _remove_method_bodies:
-        code = remove_method_bodies(code, parser)
+        code = remove_method_bodies(code, parser, excluded_methods={"createInstance"})
     else:
         code = remove_class_bodies(code, parser)
-
     return code
 
-def parser_args():
-    parser = argparse.ArgumentParser(description='Generate a prompt for LLM with project context, perturbed classes, dependencies, and noise.')
-    parser.add_argument('--config_file', type=str, required=True, help='Path to the config file.')
-    parser.add_argument('--with_iqr', action='store_true', help='Whether to use IQR to filter perturbed classes.')
-    parser.add_argument('--rm_bodies', action='store_true', help='Whether to remove method bodies (not constructor).')
-    args = parser.parse_args()
-
-    return args
-
-def generate_none_coupled_pairs(tightly_coupeled_pairs, noise_classes):
-    # The number of none coupled pairs == number of noise classes
+def generate_none_coupled_pairs(tightly_coupled_pairs, noise_classes):
+    """Generates pairs of classes that are not coupled."""
     num_of_none_coupled_pairs = len(noise_classes)
     if num_of_none_coupled_pairs == 0:
-        print("No none coupled pairs needed. Returning empty list.")
         return []
-    if num_of_none_coupled_pairs == 1:
-        # Randomly select a class from the tightly coupled pairs and use it to generate a noisy pair
-        random_class = random.choice(tightly_coupeled_pairs)
-        noise_class_name = noise_classes[0]['path'].split('/')[-1].split('.')[0]
-        return [(random_class[0], noise_class_name)]
-    
 
-    noise_classes = list(map(lambda x: x['path'].split('/')[-1].split('.')[0], noise_classes))
-    none_coupled_pairs = []
-    all_possible_pairs = list(itertools.combinations(noise_classes, 2))
-    # Shuffle the pairs
+    # Use the pre-processed 'className' field
+    noise_class_names = [n['className'].split('.')[-1].split('$')[-1] for n in noise_classes]
+    
+    if num_of_none_coupled_pairs == 1:
+        # Note: This edge case logic is still questionable (see below)
+        random_class = random.choice(tightly_coupled_pairs)
+        return [(random_class[0], noise_class_names[0])]
+
+    all_possible_pairs = list(itertools.combinations(noise_class_names, 2))
+    
     try:
         none_coupled_pairs = random.sample(all_possible_pairs, num_of_none_coupled_pairs)
     except ValueError:
-        print(f"Not enough noise classes to generate {num_of_none_coupled_pairs} none coupled pairs. Using all possible pairs.")
+        print(f"Warning: Not enough noise classes to generate {num_of_none_coupled_pairs} unique non-coupled pairs. Using all possible pairs.")
         none_coupled_pairs = all_possible_pairs
-
+        
     return none_coupled_pairs
 
-def main():
+# --- Extracted Functions ---
 
-    arguments = parser_args()
+def setup():
+    """Parses command-line arguments, loads YAML config, and initializes parser and tokenizer."""
+    parser = argparse.ArgumentParser(description='Generate a prompt for LLM with project context.')
+    parser.add_argument('--config_file', type=str, required=True, help='Path to the config file.')
+    parser.add_argument('--with_iqr', action='store_true', help='Whether to use IQR to filter perturbed classes.')
+    parser.add_argument('--rm_bodies', action='store_true', help='Whether to remove method bodies (not constructor).')
+    
+    arguments = parser.parse_args()
     args = parse_yaml_config(arguments.config_file)
-    epoch_time = int(time.time_ns())
-
     
-    
+    print("Experiment configuration:")
+    for key, value in vars(args).items():
+        print(f"{key}: {value}")
+        
     # Setup tree-sitter parser
-    JAVA_LANGUAGE = Language(tsjava.language())
-    parser = Parser(JAVA_LANGUAGE)
-
+    java_language = Language(tsjava.language())
+    ts_parser = Parser(java_language)
+    
     tokenizer = Tokenizer.from_pretrained(args.model_tag)
+    
+    return arguments, args, ts_parser, tokenizer
 
+def load_and_prepare_data(args):
+    """Loads raw perturbed and disjoint pair data and fixes nested class paths."""
     raw_perturbed_data = read_json_file(args.perturbed_json)
     raw_disjoint_pairs = read_json_file(args.disjoint_json)
 
-    # Where the dataset will be stored
-    dataset = {}
-
-    # Print the experiment configuration using for loop
-    print(f"Experiment configuration:")
-    for key, value in vars(args).items():
-        print(f"{key}: {value}")
-    # In some cases, the class might be defined within another class. For instance Foo$Bar, the class Bar will be in Foo.java and not Bar.java
-    print("Fixing nested class paths in the perturbed data...")
+    print("Fixing nested class paths...")
     raw_perturbed_data = {key: fix_nested_class_paths(value) for key, value in raw_perturbed_data.items()}
-    print("Fixing nested class paths in the disjoint pairs...")
     raw_disjoint_pairs = fix_nested_class_paths(raw_disjoint_pairs)
+    
+    return raw_perturbed_data, raw_disjoint_pairs
+
+def filter_perturbed_classes(raw_data, args, parser, tokenizer, rm_bodies, with_iqr):
+    """Processes perturbed classes, filters them based on IQR if enabled."""
     perturbed_data = {}
-    for key, value in tqdm(raw_perturbed_data.items(), desc='Reading perturbed classes to determine IQR range'):
+    for key, value in tqdm(raw_data.items(), desc='Processing perturbed classes'):
         full_path = os.path.join(args.perturbed_project_path, key)
         content, readable = read_file_content(full_path)
         if not readable:
             continue
-        # Remove the dependency if it has no dependency chain
-        new_value = []
-        for v in value:
-            if len(v['dependencyChain']) > 1:
-                new_value.append(v)
-        content = remove_comments_and_docstrings(content)
-        if arguments.rm_bodies:
-            content = remove_method_bodies(content, parser)
+        
+        new_value = [v for v in value if len(v['dependencyChain']) > 1]
+        content = clean_dependency(content, parser, _remove_method_bodies=rm_bodies)
         token_count = len(tokenizer.encode(content).ids)
         perturbed_data[key] = {'content': content, 'token_count': token_count, 'dependencies': new_value}
 
-    perturbed_classes_token_counts = [value['token_count'] for value in perturbed_data.values()]
-    if arguments.with_iqr:
-        # Calculate the IQR range of the perturbed classes token counts
-        print("Calculating IQR range for perturbed classes...")
-        mean, std = calculate_range(perturbed_classes_token_counts)
+    token_counts = [value['token_count'] for value in perturbed_data.values()]
+    
+    if with_iqr and token_counts:
+        print("Calculating and applying IQR filter for perturbed classes...")
+        mean, std = calculate_range(token_counts)
         lower_bound = mean - ALPHA * std
         upper_bound = mean + ALPHA * std
-        # Filter out perturbed classes based on the IQR range
-        perturbed_classes = [key for key, value in perturbed_data.items() if lower_bound <= value['token_count'] <= upper_bound]
-        # If perturbed_classes is empty, use all perturbed classes
-        if not perturbed_classes:
-            perturbed_classes = list(perturbed_data.keys())
+        filtered_keys = [key for key, value in perturbed_data.items() if lower_bound <= value['token_count'] <= upper_bound]
+        if not filtered_keys: # Fallback if filter is too aggressive
+             filtered_keys = list(perturbed_data.keys())
     else:
-        # Use all perturbed classes
-        perturbed_classes = list(perturbed_data.keys())
-    # Continue building the perturbed data by including the content of their dependencies and their inheritence chains
-    tightly_coupeled_pairs = []
-    collapsed_paths = {} # We will use this to avoid duplicate paths when picking noisy classes
-    num_of_perturbed_classes = 0 # Holds the number of perturbed classes, plus the number of their dependencies, plus the number of the dependency chains of each dependency
-    for key in tqdm(perturbed_classes, desc='Initializing collapsed paths with perturbed classes and their dependencies'):
-        dependencies = perturbed_data[key]['dependencies']
+        filtered_keys = list(perturbed_data.keys())
+        
+    return filtered_keys, perturbed_data
+
+def build_dependency_context(class_keys, data, args, parser, rm_bodies):
+    """Builds a map of all relevant class contents and identifies tightly coupled pairs."""
+    collapsed_paths = {}
+    tightly_coupled_pairs = []
+    
+    for key in tqdm(class_keys, desc='Building dependency context'):
+        dependencies = data[key]['dependencies']
         perturbed_class_name = key.split('/')[-1].split('.')[0]
-        collapsed_paths[key] = perturbed_data[key]['content']
+        collapsed_paths[key] = data[key]['content']
+
         for dep in dependencies:
             dep_path = os.path.join(args.perturbed_project_path, dep['dependencyClassFilePath'])
             dep_content, readable = read_file_content(dep_path)
             if not readable:
                 continue
-            dep_content = clean_depedency(dep_content, parser, _remove_method_bodies=arguments.rm_bodies)
+            
+            dep_content = clean_dependency(dep_content, parser, _remove_method_bodies=rm_bodies)
             collapsed_paths[dep['dependencyClassFilePath']] = dep_content
-            # Interate over the dependency chain
+            
             dependency_class_name = dep['dependencyClassName'].split('.')[-1]
-            # Update ground truth
-            tightly_coupeled_pairs.append((perturbed_class_name, dependency_class_name))
+            tightly_coupled_pairs.append((perturbed_class_name, dependency_class_name))
+
             for chain_entry in dep['dependencyChain']:
-                chain_path = os.path.join(args.perturbed_project_path, chain_entry['filePath'])
-                chain_content, readable = read_file_content(chain_path)
-                if not readable:
-                    continue
                 if chain_entry['className'] == dependency_class_name:
                     continue
-                
-                chain_content = clean_depedency(chain_content, parser, _remove_method_bodies=arguments.rm_bodies)
-                collapsed_paths[chain_entry['filePath']] = chain_content
-        
-    num_of_perturbed_classes = len(collapsed_paths)
+                chain_path = os.path.join(args.perturbed_project_path, chain_entry['filePath'])
+                chain_content, readable = read_file_content(chain_path)
+                if readable:
+                    chain_content = clean_dependency(chain_content, parser, _remove_method_bodies=rm_bodies)
+                    collapsed_paths[chain_entry['filePath']] = chain_content
+                    
+    return collapsed_paths, tightly_coupled_pairs
+
+def collect_and_filter_noise_candidates(disjoint_pairs, existing_paths, args, parser, tokenizer, rm_bodies, with_iqr):
+    """Collects and filters noise candidates from disjoint pairs."""
     noise_candidates = {}
-    noise_candidates_lengths = []
-    for pair in tqdm(raw_disjoint_pairs, desc='Collecting noise candidates from disjoint pairs'):
-        left_path = pair['left']['filePath']
-        right_path = pair['right']['filePath']
-        if (left_path not in collapsed_paths):
-            full_left_path = os.path.join(args.noisy_project_path, left_path)
-            content, readable = read_file_content(full_left_path)
-            if not readable:
-                continue
-            content = remove_comments_and_docstrings(content)
-            if arguments.rm_bodies:
-                content = remove_method_bodies(content, parser)
-            token_count = len(tokenizer.encode(content).ids)
-            noise_candidates_lengths.append(token_count)
-            lefClassName = pair['left']['className'].split('.')[-1]
-            # Check if the dollar sign is in the class name, if so, it means it is an inner class
-            if '$' in lefClassName:
-                lefClassName = lefClassName.split('$')[-1]
-            noise_candidates[left_path] = {'content': content, 'className': lefClassName , 'token_count': token_count}
+    
+    for pair in tqdm(disjoint_pairs, desc='Collecting noise candidates'):
+        for item in [pair['left'], pair['right']]:
+            path = item['filePath']
+            if path not in existing_paths:
+                full_path = os.path.join(args.noisy_project_path, path)
+                content, readable = read_file_content(full_path)
+                if readable:
+                    content = clean_dependency(content, parser, _remove_method_bodies=rm_bodies)
+                    token_count = len(tokenizer.encode(content).ids)
+                    class_name = item['className'].split('.')[-1].replace('$', '.')
+                    noise_candidates[path] = {'content': content, 'className': class_name, 'token_count': token_count}
 
+    candidate_list = [{'path': k, **v} for k, v in noise_candidates.items()]
+    token_counts = [n['token_count'] for n in candidate_list]
+
+    if with_iqr and token_counts:
+        print("Calculating and applying IQR filter for noise candidates...")
+        mean, std = calculate_range(token_counts)
+        lower_bound = mean - ALPHA * std
+        upper_bound = mean + ALPHA * std
+        candidate_list = [n for n in candidate_list if lower_bound <= n['token_count'] <= upper_bound]
+
+    print(f"Number of noise candidates after filtering: {len(candidate_list)}")
+    return sorted(candidate_list, key=lambda x: x['token_count'])
+
+def generate_and_save_prompts(template_name, args, arguments, epoch_time, num_perturbed_classes, collapsed_paths, tightly_coupled_pairs, noise_candidates, tokenizer):
+    """Generates and saves prompts for a given template across all noise ratios."""
+    dataset = {}
+    prompt_template_content = ""
+
+    for noise_ratio in NOISE_RATIOS:
+        n_noise_classes = int(noise_ratio * num_perturbed_classes / (1 - noise_ratio))
+        selected_noise = noise_candidates[:n_noise_classes]
         
-        if (right_path not in collapsed_paths):
-            full_right_path = os.path.join(args.noisy_project_path, right_path)
-            content, readable = read_file_content(full_right_path)
-            if not readable:
-                continue
-            content = remove_comments_and_docstrings(content)
-            if arguments.rm_bodies:
-                content = remove_method_bodies(content, parser)
-            token_count = len(tokenizer.encode(content).ids)
-            noise_candidates_lengths.append(token_count)
-            rightClassName = pair['right']['className'].split('.')[-1]
-            # Check if the dollar sign is in the class name, if so, it means it is an inner class
-            if '$' in rightClassName:
-                rightClassName = rightClassName.split('$')[-1]
-            noise_candidates[right_path] = {'content': content, 'className': rightClassName , 'token_count': token_count}
+        # Combine perturbed context with noise
+        classes = list(collapsed_paths.items()) + [(n['path'], n['content']) for n in selected_noise]
+        
+        # Prepare template-specific data
+        non_coupled_pairs = []
+        classes_under_analysis = []
+        if template_name == 'binary':
+            non_coupled_pairs = generate_none_coupled_pairs(tightly_coupled_pairs, selected_noise)
+        elif template_name == 'hybrid':
+            classes_under_analysis = list(set(pair[0] for pair in tightly_coupled_pairs))
+            noisy_class_names = [n['className'] for n in selected_noise]
+            classes_under_analysis.extend(noisy_class_names)
 
-    # Revert the dictionary to a list
-    noise_candidates = [{'path': k, 'content': v['content'], 'className': v['className'], 'token_count': v['token_count']} for k, v in noise_candidates.items()]
-    if arguments.with_iqr:
-        # Calculate the IQR range of the noise candidates token counts
-        print("Calculating IQR range for noise candidates...")
-        mean_noise, std_noise = calculate_range(noise_candidates_lengths)
-        lower_bound_noise = mean_noise - ALPHA * std_noise
-        upper_bound_noise = mean_noise + ALPHA * std_noise
-        # Filter out noise candidates based on the IQR range
-        noise_candidates = [n for n in noise_candidates if lower_bound_noise <= n['token_count'] <= upper_bound_noise]
-    print(f"Number of noise candidates: {len(noise_candidates)}")
-    # Sort noise candidates by token count in ascending order
-    noise_candidates = sorted(noise_candidates, key=lambda x: x['token_count'])
-    # Noise ratio: (normal classes) / total classes where total classes = normal classes + perturbed classes + perturbed classes's dependencies + dep_chain of each dependency
-    # Based on this ratio, we will select the number of noisy classes to include in the prompt
-    for template_name in TEMPLATES:
-        print(f"Generating prompts for template: {template_name}")
-        for noise_ratio in NOISE_RATIOS:
-            n_noise_classes = int(noise_ratio * num_of_perturbed_classes / (1 - noise_ratio))
-            # Select the noise_classes-th classes given that noise_candidates are sorted by token count
-            noise_classes = noise_candidates[:n_noise_classes]
-            # Collect classes to include in the prompt
-            classes = []
-            for n_class in noise_classes:
-                content = n_class['content']
-                path = n_class['path']
-                classes.append((path, content))
-            
-            for path, content in collapsed_paths.items():
-                classes.append((path, content))
-            
-            print(f"Number of classes in the prompt: {len(classes)}, Number of perturbed classes: {num_of_perturbed_classes}, Number of noisy classes: {len(noise_classes)}, Noise ratio: {noise_ratio}")
+        # Build ground truth
+        if template_name in ['retrieval', 'hybrid']:
+            ground_truth = deepcopy(tightly_coupled_pairs)
+            if template_name == 'hybrid':
+                ground_truth.extend([(cls, None) for cls in noisy_class_names])
+        else: # binary
+            ground_truth = [{"pair": p, "coupled": True} for p in tightly_coupled_pairs]
+            ground_truth.extend([{"pair": p, "coupled": False} for p in non_coupled_pairs])
 
-            if template_name == 'binary':
-                non_coupeled_pairs = generate_none_coupled_pairs(tightly_coupeled_pairs, noise_classes)
-                all_class_pairs = non_coupeled_pairs + tightly_coupeled_pairs
-
-            elif template_name == 'hybrid':
-                # Get the first element of each class pair of tightly_coupled_pairs
-                classes_under_analysis = set(pair[0] for pair in tightly_coupeled_pairs)
-                classes_under_analysis = list(classes_under_analysis)
-                # Get the noisy classes
-                _noisy_classes = set(n_class['className'] for n_class in noise_classes)
-                # Add the noisy classes to the classes under analysis
-                classes_under_analysis.extend(_noisy_classes)
-
-            # Build the groundtruth for the prompt
-            if template_name == 'retrieval' or template_name == 'hybrid':
-                ground_truth = deepcopy(tightly_coupeled_pairs)
-                if template_name == 'hybrid':
-                    non_coupled_pairs = [(_cls, None) for _cls in _noisy_classes]
-                    ground_truth.extend(non_coupled_pairs)
+        all_prompts = []
+        for shuff in range(args.n_shuffles):
+            random.shuffle(classes)
+            classes_str = "".join(f"{path}\n{content}\n{'=' * 50}\n" for path, content in classes)
             
-            
+            # Format the prompt
+            if template_name == 'retrieval':
+                prompt_template_content = RETRIEVAL_BASED_COUPLING
+                prompt = prompt_template_content.format(project_name=args.project_name, list_of_classes=classes_str)
             elif template_name == 'binary':
-                print(f"Number of tightly coupled pairs: {len(tightly_coupeled_pairs)}, Number of none coupled pairs: {len(non_coupeled_pairs)}")
-                ground_truth_tightly_coupeled_pairs = [ {"pair": p, "coupled": True} for p in tightly_coupeled_pairs]
-                ground_truth_non_coupeled_pairs = [ {"pair": p, "coupled": False} for p in non_coupeled_pairs]
-                ground_truth = ground_truth_non_coupeled_pairs + ground_truth_tightly_coupeled_pairs
+                prompt_template_content = BINARY_BASED_COUPLING
+                all_class_pairs = non_coupled_pairs + tightly_coupled_pairs
+                random.shuffle(all_class_pairs)
+                prompt = prompt_template_content.format(project_name=args.project_name, class_pair=all_class_pairs, list_of_classes=classes_str)
+            else: # hybrid
+                prompt_template_content = HYBRID_PROMPT
+                random.shuffle(classes_under_analysis)
+                prompt = prompt_template_content.format(project_name=args.project_name, classes_under_analysis=classes_under_analysis, list_of_classes=classes_str)
+            all_prompts.append(prompt)
 
-            all_prompts = []
-            # Generate a prompt for each shuffle
-            for shuff in range(args.n_shuffles):
-                # Shuffle the classes
-                random.shuffle(classes)
-                # Generate the prompt
-                classes_str = ""
-                for path, content in classes:
-                    classes_str += f"{path}\n"
-                    classes_str += f"{content}\n"
-                    classes_str += f"{'=' * 50}\n"
-                
-                if template_name == 'retrieval':
-                    prompt_template = RETRIEVAL_BASED_COUPLING
-                    prompt = RETRIEVAL_BASED_COUPLING.format(
-                        project_name=args.project_name, 
-                        list_of_classes=classes_str
-                        )
-                elif template_name == 'binary':
-                    prompt_template = BINARY_BASED_COUPLING
-                    # Shuffle the class pairs
-                    random.shuffle(all_class_pairs)
-                    prompt = BINARY_BASED_COUPLING.format(
-                            project_name=args.project_name,
-                            class_pair=all_class_pairs,
-                            list_of_classes=classes_str
-                        )
-                elif template_name == 'hybrid':
-                    prompt_template = HYBRID_PROMPT
-                    # Shuffle the classes
-                    random.shuffle(classes_under_analysis)
-                    # Generate the prompt
-                    prompt = HYBRID_PROMPT.format(
-                        project_name=args.project_name,
-                        classes_under_analysis=classes_under_analysis,
-                        list_of_classes=classes_str
-                    )
-
-                all_prompts.append(prompt)
-                if shuff == args.n_shuffles - 1:
-                    len_prompt = len(tokenizer.encode(all_prompts[0]).ids)
-                    print(f"Number of involved classes: {len(classes)}, # Perturbed classes {num_of_perturbed_classes}, # Noisy classes {n_noise_classes}, Prompt token count: {len_prompt}, R={noise_ratio}, S={shuff}")
-                    metadata = {
-                        'noise_ratio': noise_ratio,
-                        'n_perturbed_classes': num_of_perturbed_classes,
-                        'n_noise_classes': n_noise_classes,
-                        'total_classes': len(classes),
-                        'prompt_token_count': len_prompt,
-                        'model_tag': args.model_tag,
-                        'classes': [c[0] for c in classes],
-                    }
-                    noise_ratio_data = {
-                        'metadata': metadata,
-                        'ground_truth': ground_truth,
-                        'prompts': all_prompts,
-                    }
-
-                    # Save the ground truth to the dataset
-                    dataset[noise_ratio] = noise_ratio_data
+        # Create metadata and store results for this noise ratio
+        len_prompt = len(tokenizer.encode(all_prompts[0]).ids)
+        print(f"R={noise_ratio}: Total Classes={len(classes)}, Perturbed Context={num_perturbed_classes}, Noise={len(selected_noise)}, Token Count={len_prompt}")
         
-        
-        output_dir = f"{args.project_name}_{'-'.join(args.perturbation_types)}_{epoch_time}"
-        output_dir = os.path.join(args.output_dir, output_dir)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        # Create a subdirectory for the current template
-        output_dir = os.path.join(output_dir, template_name)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        # Include the content of the prompt template in the config file
-        args.template = prompt_template
-        # Copy the config file to the output directory for reproducibility
-        config_file_name = os.path.basename(arguments.config_file)
-        config_file_path = os.path.join(output_dir, config_file_name)
-        # Save the dataset to a JSON file
-        dataset_file_name = f"dataset.json"
-        dataset_file_path = os.path.join(output_dir, dataset_file_name)
-        save_to_json(dataset, dataset_file_path)
-        # Save to YML at prompt directory
-        save_config_to_yaml(args, config_file_path)
-        print(f"Prompt generation completed. Output directory: {output_dir}")
+        metadata = {
+            'noise_ratio': noise_ratio, 'n_perturbed_classes': num_perturbed_classes,
+            'n_noise_classes': n_noise_classes, 'total_classes': len(classes),
+            'prompt_token_count': len_prompt, 'model_tag': args.model_tag,
+            'classes': [c[0] for c in classes]
+        }
+        dataset[noise_ratio] = {'metadata': metadata, 'ground_truth': ground_truth, 'prompts': all_prompts}
 
+    # Save all artifacts for this template
+    output_dir = os.path.join(args.output_dir, f"{args.project_name}_{'-'.join(args.perturbation_types)}_{epoch_time}", template_name)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    save_to_json(dataset, os.path.join(output_dir, "dataset.json"))
+    
+    args.template = prompt_template_content
+    save_config_to_yaml(args, os.path.join(output_dir, os.path.basename(arguments.config_file)))
+    
+    print(f"Prompt generation completed for template '{template_name}'. Output directory: {output_dir}")
 
-        
+# --- Main Orchestrator ---
+def main():
+    """Main function to orchestrate the prompt generation process."""
+    arguments, args, parser, tokenizer = setup()
+    epoch_time = int(time.time_ns())
+
+    raw_perturbed_data, raw_disjoint_pairs = load_and_prepare_data(args)
+
+    perturbed_class_keys, perturbed_data = filter_perturbed_classes(
+        raw_perturbed_data, args, parser, tokenizer, arguments.rm_bodies, arguments.with_iqr
+    )
+
+    collapsed_paths, tightly_coupled_pairs = build_dependency_context(
+        perturbed_class_keys, perturbed_data, args, parser, arguments.rm_bodies
+    )
+    
+    noise_candidates = collect_and_filter_noise_candidates(
+        raw_disjoint_pairs, collapsed_paths, args, parser, tokenizer, arguments.rm_bodies, arguments.with_iqr
+    )
+    
+    for template_name in TEMPLATES:
+        generate_and_save_prompts(
+            template_name=template_name,
+            args=args,
+            arguments=arguments,
+            epoch_time=epoch_time,
+            num_perturbed_classes=len(collapsed_paths),
+            collapsed_paths=deepcopy(collapsed_paths),
+            tightly_coupled_pairs=deepcopy(tightly_coupled_pairs),
+            noise_candidates=noise_candidates,
+            tokenizer=tokenizer
+        )
 
 if __name__ == "__main__":
     main()
