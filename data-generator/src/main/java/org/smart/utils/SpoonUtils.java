@@ -58,6 +58,41 @@ public class SpoonUtils {
         return !testMethods.isEmpty();
     }
 
+    /**
+     * (Alternative Implementation) Checks if a CtClass is a test class using a combination of heuristics.
+     *
+     * @param ctClass The class to check.
+     * @return true if the class is likely a test class, false otherwise.
+     */
+    public static boolean isTestClass(CtClass<?> ctClass) {
+        // Heuristic 1: Check file path (most reliable for Maven/Gradle projects)
+        if (ctClass.getPosition() != null && ctClass.getPosition().getFile() != null) {
+            // Normalize path separators for cross-platform compatibility
+            String path = ctClass.getPosition().getFile().getAbsolutePath().replace('\\', '/');
+            if (path.contains("/src/test/") || path.contains("/test/")) {
+                return true;
+            }
+        }
+
+        // Heuristic 2: Check class name conventions
+        String className = ctClass.getSimpleName();
+        if (className.endsWith("Test") || className.endsWith("Tests")) {
+            return true;
+        }
+
+        // Heuristic 3: Check for common test annotations on methods
+        for (CtMethod<?> method : (Set<CtMethod<?>>) ctClass.getMethods()) {
+            for (CtAnnotation<?> annotation : method.getAnnotations()) {
+                String annotationName = annotation.getAnnotationType().getQualifiedName();
+                if ("org.junit.Test".equals(annotationName) || "org.junit.jupiter.api.Test".equals(annotationName)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public static List<CtTypeReference<?>> getDependencyChain(CtTypeReference<?> startType, CtTypeReference<?> targetType) {
         Queue<Pair<CtTypeReference<?>, List<CtTypeReference<?>>>> queue = new LinkedList<>();
         Set<CtTypeReference<?>> visited = new HashSet<>();
