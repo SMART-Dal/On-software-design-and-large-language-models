@@ -5,18 +5,17 @@ import spoon.reflect.CtModel;
 import spoon.reflect.declaration.CtClass;
 import spoon.reflect.declaration.CtElement;
 import spoon.reflect.declaration.CtMethod;
+import spoon.reflect.declaration.CtType;
+import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.visitor.filter.TypeFilter;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.smart.utils.SpoonUtils.isJavaNativeType;
 import static org.smart.utils.SpoonUtils.isTestClass;
 
 public class CohesionCandidateSelector {
@@ -30,38 +29,51 @@ public class CohesionCandidateSelector {
         launcher.getEnvironment().setNoClasspath(true);
         launcher.getEnvironment().setIgnoreDuplicateDeclarations(true);
         CtModel model = launcher.buildModel();
-
         List<CtClass<?>> classes = model.getElements(new TypeFilter<>(CtClass.class));
-
         List<CohesionDatasetGenerator.CandidateClass> candidates = new ArrayList<>();
 
         for (CtClass<?> ctClass : classes) {
-            if (!ctClass.isClass() || isTestClass(ctClass)) {
-                continue;
-            }
+            if (!ctClass.isClass() || isTestClass(ctClass)) continue;
 
             String csvFqn = ctClass.getQualifiedName().replace('$', '.');
             if (!lcomData.containsKey(csvFqn)) continue;
 
             Integer lcom = lcomData.get(csvFqn);
-
-            Set<CtMethod<?>> declaredMethods = ctClass.getMethods().stream()
-                    .filter(m -> m.getDeclaringType().getQualifiedName().equals(ctClass.getQualifiedName()))
-                    .collect(Collectors.toSet());
-            int numMethods = declaredMethods.size();
+            int numMethods = CohesionAnalyzer.getDeclaredMethods(ctClass).size();
 
             if (lcom != null && lcom == 0 && numMethods > 2) {
                 Map<CtElement, Set<CtElement>> adjList = cohesionAnalyzer.buildAdjacencyList(ctClass);
                 List<Set<CtElement>> components = cohesionAnalyzer.findComponents(adjList);
                 List<Set<String>> methodGroups = cohesionAnalyzer.getMethodGroups(components);
 
-                // The crucial filter: only accept classes with exactly ONE component
                 if (methodGroups.size() == 1) {
                     candidates.add(new CohesionDatasetGenerator.CandidateClass(ctClass, methodGroups.get(0)));
                 }
             }
         }
         return candidates;
+    }
+
+    public static Set<String> getInheritanceChain(CtClass<?> ctClass) {
+        Set<String> chain = new HashSet<>();
+        Queue<CtTypeReference<?>> queue = new LinkedList<>();
+        if (ctClass.getSuperclass() != null) queue.add(ctClass.getSuperclass());
+        queue.addAll(ctClass.getSuperInterfaces());
+
+        while (!queue.isEmpty()) {
+            CtTypeReference<?> currentTypeRef = queue.poll();
+            if (currentTypeRef == null || chain.contains(currentTypeRef.getQualifiedName())) continue;
+            String fqn = currentTypeRef.getQualifiedName();
+            if (!isJavaNativeType(currentTypeRef)) {
+                chain.add(fqn);
+                CtType<?> currentTypeDecl = currentTypeRef.getDeclaration();
+                if (currentTypeDecl != null) {
+                    if (currentTypeDecl.getSuperclass() != null) queue.add(currentTypeDecl.getSuperclass());
+                    queue.addAll(currentTypeDecl.getSuperInterfaces());
+                }
+            }
+        }
+        return chain;
     }
 
     private Map<String, Integer> loadLcomData(String csvPath) {
