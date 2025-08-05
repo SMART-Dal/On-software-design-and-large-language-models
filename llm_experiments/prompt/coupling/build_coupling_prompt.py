@@ -17,7 +17,7 @@ import itertools
 
 # --- Constants ---
 ALPHA = 0.5
-NOISE_RATIOS = [round(i * 1e-1, 1) for i in range(1, 9)]
+NOISE_RATIOS = [round(i * 1e-1, 1) for i in range(1, 10)]
 TEMPLATES = [
     'retrieval',
     'binary',
