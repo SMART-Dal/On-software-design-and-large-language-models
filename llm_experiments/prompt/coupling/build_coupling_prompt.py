@@ -249,6 +249,8 @@ def generate_and_save_prompts(template_name, args, arguments, epoch_time, num_pe
             'noise_ratio': noise_ratio, 'n_perturbed_classes': num_perturbed_classes,
             'n_noise_classes': n_noise_classes, 'total_classes': len(classes),
             'prompt_token_count': len_prompt, 'model_tag': args.model_tag,
+            'perturbed_data_file': args.perturbed_json,
+            'disjoint_data_file': args.disjoint_json,
             'classes': [c[0] for c in classes]
         }
         dataset[noise_ratio] = {'metadata': metadata, 'ground_truth': ground_truth, 'prompts': all_prompts}
