@@ -1,11 +1,10 @@
-package org.smart.processors;
+package org.anon.processors;
 
-import org.smart.utils.*;
+import org.anon.utils.*;
 import spoon.processing.AbstractProcessor;
 import spoon.reflect.code.*;
 import spoon.reflect.cu.SourcePosition;
 import spoon.reflect.declaration.*;
-import spoon.reflect.factory.Factory;
 import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.visitor.filter.AbstractFilter;
 

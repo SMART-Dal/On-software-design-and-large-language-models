@@ -1,15 +1,13 @@
-package org.smart.processors;
+package org.anon.processors;
 
-import org.smart.utils.ClassInformation;
-import org.smart.utils.Dependency;
-import org.smart.utils.SetUtils;
-import org.smart.utils.SpoonUtils;
+import org.anon.utils.ClassInformation;
+import org.anon.utils.Dependency;
+import org.anon.utils.SetUtils;
+import org.anon.utils.SpoonUtils;
 import spoon.processing.AbstractProcessor;
 import spoon.reflect.code.*;
 import spoon.reflect.cu.SourcePosition;
 import spoon.reflect.declaration.*;
-import spoon.reflect.factory.Factory;
-import spoon.reflect.reference.CtExecutableReference;
 import spoon.reflect.reference.CtFieldReference;
 import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.reference.CtVariableReference;
@@ -20,7 +18,7 @@ import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class FactoryMethodObfuscator extends AbstractProcessor<CtElement> {
+public class UnusedInjectedDependencyProcessor extends AbstractProcessor<CtElement> {
     // Store classes that were modified
     public static Map<String, String> modifiedCallers = new HashMap<>();
     public static Map<String, String> modifiedCallees = new HashMap<>();
@@ -80,45 +78,11 @@ public class FactoryMethodObfuscator extends AbstractProcessor<CtElement> {
         }
 
     }
-    private boolean addStaticFactoryMethod(
-            CtClass<?> targetClass,
-            String methodName,
-            CtTypeReference<?> returnType,
-            CtTypeReference<?> instanceType) {
-
-        if (!targetClass.getMethodsByName(methodName).isEmpty()) {
-            return false; // Method already exists.
-        }
-
-        Factory factory = targetClass.getFactory();
-
-        // Create the method body: "return new [instanceType]();"
-        CtConstructorCall<?> constructorCall = factory.createConstructorCall(instanceType);
-        CtReturn<?> returnStatement = factory.Code().createCtReturn(constructorCall);
-        CtBlock<?> methodBody = factory.createBlock().addStatement(returnStatement);
-
-        // Create the method with its signature and body.
-        CtMethod<?> factoryMethod = factory.createMethod(
-                targetClass,
-                Collections.singleton(ModifierKind.PUBLIC),
-                returnType,
-                methodName,
-                Collections.emptyList(), // No parameters
-                Collections.emptySet()   // No thrown exceptions
-        );
-        factoryMethod.addModifier(ModifierKind.STATIC);
-        factoryMethod.setBody(methodBody);
-
-        targetClass.addMethod(factoryMethod);
-
-        return true;
-    }
 
     @Override
     public void processingDone() {
         // Remove DI setters.
-        // Create a static method within the body of the dependency called `createInstance` that returns a new instance of that dependency.
-        // Then, invoke it within the mutated class.
+        // Directly instantiate the dependencies in the constructor body while preserving the constructor signature.
         for (CtConstructor<?> ctor : diConstructors) {
             CtClass<?> parentClass = ctor.getParent(CtClass.class);
             if (parentClass != null) {
@@ -160,19 +124,9 @@ public class FactoryMethodObfuscator extends AbstractProcessor<CtElement> {
                                 if (concreteType == null) {
                                     return;
                                 }
-                                // Inject a `createInstance` method in the concrete type
-                                // Replace RHS with `createInstance` invocation from the concrete type
-                                this.addStaticFactoryMethod((CtClass<?>) concreteType.getDeclaration(), "createInstance", fieldRef.getType(), concreteType);
-                                // Create a reference to the static method: concreteType.createInstance()
-                                CtTypeAccess<?> typeAccessConcrete = getFactory().createTypeAccess(concreteType);
-                                CtExecutableReference<?> methodRef = getFactory().Core().createExecutableReference();
-                                methodRef.setSimpleName("createInstance");
-                                methodRef.setDeclaringType(concreteType);
-                                methodRef.setStatic(true);
-
-                                CtInvocation staticInvocation = getFactory().createInvocation(typeAccessConcrete, methodRef);
-
-                                assignment.setAssignment(staticInvocation);
+                                // Replace RHS with constructor call.
+                                CtConstructorCall newInstanceCall = getFactory().Code().createConstructorCall(concreteType);
+                                assignment.setAssignment(newInstanceCall);
                                 // Save information
                                 CtType<?> declaringType = parentClass;
                                 String classFilePath = SpoonUtils.getOutputRelativePath(declaringType);
@@ -356,4 +310,5 @@ public class FactoryMethodObfuscator extends AbstractProcessor<CtElement> {
         }
         return false;
     }
+
 }

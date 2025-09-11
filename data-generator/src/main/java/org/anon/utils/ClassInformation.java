@@ -1,4 +1,4 @@
-package org.smart.utils;
+package org.anon.utils;
 
 public class ClassInformation {
     // Utility class that holds a class's basic information

@@ -1,7 +1,6 @@
-package org.smart.utils;
+package org.anon.utils;
 
 import org.apache.commons.lang3.tuple.Pair;
-import spoon.Launcher;
 import spoon.MavenLauncher;
 import spoon.reflect.CtModel;
 import spoon.reflect.declaration.CtClass;
@@ -9,7 +8,6 @@ import spoon.reflect.declaration.CtPackage;
 import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.visitor.filter.TypeFilter;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 

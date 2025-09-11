@@ -1,6 +1,6 @@
-package org.smart;
+package org.anon;
 
-import org.smart.utils.SpoonUtils;
+import org.anon.utils.SpoonUtils;
 import spoon.reflect.declaration.CtClass;
 import spoon.reflect.declaration.CtField;
 import spoon.reflect.declaration.CtMethod;

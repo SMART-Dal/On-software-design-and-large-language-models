@@ -1,4 +1,4 @@
-package org.smart;
+package org.anon;
 
 import spoon.reflect.declaration.CtClass;
 import spoon.reflect.declaration.CtElement;
@@ -21,7 +21,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.smart.utils.SpoonUtils.getSimplifiedSignature;
+import static org.anon.utils.SpoonUtils.getSimplifiedSignature;
 
 /**
  * A utility class to analyze the structural cohesion of a Java class.

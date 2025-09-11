@@ -1,8 +1,7 @@
-package org.smart.processors;
+package org.anon.processors;
 
 import spoon.processing.AbstractProcessor;
 import spoon.reflect.code.*;
-import spoon.reflect.declaration.CtElement;
 
 public class InstantiationRemoverProcessor extends AbstractProcessor<CtStatement> {
     public static int modifiedClassesCounter = 0;

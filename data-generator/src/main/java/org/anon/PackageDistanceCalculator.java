@@ -1,7 +1,7 @@
-package org.smart;
+package org.anon;
 
-import org.smart.utils.PathUtils;
-import org.smart.utils.SpoonUtils;
+import org.anon.utils.PathUtils;
+import org.anon.utils.SpoonUtils;
 import spoon.Launcher;
 import spoon.reflect.CtModel;
 import spoon.reflect.declaration.CtClass;
@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.smart.utils.CSVWriter.writeReportToFile;
+import static org.anon.utils.CSVWriter.writeReportToFile;
 
 /**
  * A class to calculate the "Package Tree Distance" for every pair

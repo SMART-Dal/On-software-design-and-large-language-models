@@ -1,4 +1,4 @@
-package org.smart;
+package org.anon;
 
 import spoon.MavenLauncher;
 import spoon.reflect.CtModel;
@@ -13,10 +13,9 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
-import java.util.stream.Collectors;
 
-import static org.smart.utils.SpoonUtils.isJavaNativeType;
-import static org.smart.utils.SpoonUtils.isTestClass;
+import static org.anon.utils.SpoonUtils.isJavaNativeType;
+import static org.anon.utils.SpoonUtils.isTestClass;
 
 public class CohesionCandidateSelector {
     private final CohesionAnalyzer cohesionAnalyzer = new CohesionAnalyzer();

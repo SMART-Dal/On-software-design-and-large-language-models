@@ -1,8 +1,7 @@
-package org.smart;
+package org.anon;
 
 import spoon.MavenLauncher;
 import spoon.reflect.declaration.CtClass;
-import spoon.reflect.reference.CtTypeReference;
 
 import java.io.File;
 import java.util.*;

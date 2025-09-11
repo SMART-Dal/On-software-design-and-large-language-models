@@ -1,7 +1,4 @@
-package org.smart.utils;
-
-import java.util.ArrayList;
-import java.util.List;
+package org.anon.utils;
 
 public class DiDModifiedClass {
    private String modifiedClassName;

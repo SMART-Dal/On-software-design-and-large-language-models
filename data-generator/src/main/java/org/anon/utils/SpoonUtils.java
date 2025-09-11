@@ -1,13 +1,10 @@
-package org.smart.utils;
+package org.anon.utils;
 
 import org.apache.commons.lang3.tuple.Pair;
-import spoon.reflect.code.CtConstructorCall;
-import spoon.reflect.cu.SourcePosition;
 import spoon.reflect.declaration.*;
 import spoon.reflect.reference.CtTypeReference;
 import spoon.reflect.visitor.filter.TypeFilter;
 
-import java.io.File;
 import java.util.*;
 import java.util.stream.Collectors;
 

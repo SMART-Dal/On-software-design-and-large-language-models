@@ -1,15 +1,12 @@
-package org.smart;
+package org.anon;
 import org.apache.commons.lang3.tuple.Pair;
-import org.smart.processors.*;
-import org.smart.utils.*;
-import spoon.Launcher;
+import org.anon.processors.*;
+import org.anon.utils.*;
 import spoon.MavenLauncher;
 import spoon.OutputType;
-import spoon.support.Level;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;

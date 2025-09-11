@@ -1,4 +1,4 @@
-package org.smart.processors;
+package org.anon.processors;
 
 import spoon.processing.AbstractProcessor;
 import spoon.reflect.declaration.CtClass;
