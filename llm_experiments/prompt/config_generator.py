@@ -71,7 +71,8 @@ def generate_yml_config(
 
     perturbation_map = {
        'did': 'directinstantiation',
-       'uid': 'unusedinjecteddependency'
+       'uid': 'unusedinjecteddependency',
+       'fmo': 'factorymethodobfuscator'
     }
 
     # Define the YML content using an f-string as a template
@@ -80,7 +81,7 @@ project_name: {project_name}
 perturbed_project_path: "{root_dir}/{project_name}-transformed_{perturbation_map[perturbation_types[0]]}"
 noisy_project_path: "{root_dir}/{project_name}-transformed_instantiationremover"
 disjoint_json: "{root_dir}/{project_name}_disjointPairs.json"
-perturbed_json: "{root_dir}/{project_name}_mutated_classes_{perturbation_types[0]}.json"
+perturbed_json: "{root_dir}/{project_name}_coupling_common.json"
 output_dir: {output_dir}
 seed: {seed}
 model_tag: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
@@ -108,13 +109,14 @@ if __name__ == "__main__":
         projects.add(project)
     
     pbar = tqdm(projects, desc="Generating YML configs")
-    output_directory = args.ymls_output_dir
+    ymls_output_directory = args.ymls_output_dir
+    output_directory = args.output_dir
     random_seed = args.seed
     shuffles = args.n_shuffles
     perturbations = args.perturbation_types
     for project in pbar:
         pbar.set_description(f"Generating YML config for {project}")
-        yml_file_name = os.path.join(output_directory, f"{project}_config.yml")
+        yml_file_name = os.path.join(ymls_output_directory, f"{project}_config.yml")
         generate_yml_config(
            root_dir=args.root_dir,
             project_name=project,
