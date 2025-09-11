@@ -33,16 +33,25 @@ def extract_json_from_markdown(markdown_string):
     Returns:
         A Python dictionary representing the extracted JSON, or None if no JSON is found.
     """
-    json_match = re.search(r"```(?:json)?\n(.*?)\n```", markdown_string, re.DOTALL)
-    if json_match:
+    json_pattern = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
+    
+    # Find all non-overlapping matches in the string
+    json_blocks = json_pattern.findall(markdown_string)
+    
+    parsed_json_list = []
+    for block in json_blocks:
+        # Avoid trying to parse empty or whitespace-only blocks
+        if not block.strip():
+            continue
         try:
-            return json.loads(json_match.group(1))
-        except json.JSONDecodeError:
-            return None
-    try:
-      return json.loads(markdown_string)
-    except json.JSONDecodeError:
-      return None
+            # Parse the extracted string into a Python object
+            parsed_json = json.loads(block)
+            parsed_json_list.append(parsed_json)
+        except json.JSONDecodeError as e:
+            # Handle cases where a block contains invalid JSON
+            print(f"Skipping a block due to a JSON parsing error: {e}")
+            
+    return parsed_json_list
 
 
 def process_files(input_folder, output_folder):

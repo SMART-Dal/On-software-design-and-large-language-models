@@ -137,6 +137,48 @@ def remove_method_bodies(
     # Decode the modified byte array back into a string and return it.
     return code_bytearray.decode("utf8")
 
+def extract_method_names_from_class(code: str, parser: Parser) -> List[str]:
+    """
+    Extracts method names by manually traversing the syntax tree.
+
+    This function parses the code and recursively visits every node. If a node
+    of type 'method_declaration' is found, it extracts the identifier from its
+    'name' field.
+
+    Args:
+        code: A string containing the Java class code.
+        parser: A pre-configured tree-sitter Parser instance with the Java
+                language loaded.
+
+    Returns:
+        A list of strings, where each string is a found method name.
+    """
+    # 1. Parse the code to get the tree
+    tree = parser.parse(bytes(code, "utf8"))
+    root_node = tree.root_node
+
+    method_names = []
+
+    # 2. Define a recursive function to walk the tree
+    def traverse_tree(node: Node):
+        # 3. Check the type of the current node
+        if node.type == 'method_declaration':
+            # This node is a method. Now, we need to find the node
+            # containing its name. The Java grammar assigns the method's
+            # identifier to a field named 'name'.
+            name_node = node.child_by_field_name('name')
+            if name_node:
+                method_name = name_node.text.decode('utf8')
+                method_names.append(method_name)
+
+        # 4. Recursively call this function for all children of the current node
+        for child in node.children:
+            traverse_tree(child)
+
+    # 5. Start the traversal from the root node
+    traverse_tree(root_node)
+
+    return method_names
 
 if __name__ == "__main__":
     # 1. Set up the parser (this will clone and build the grammar on first run)
@@ -145,51 +187,117 @@ if __name__ == "__main__":
 
     # 2. Define an example Java class with various constructs
     java_code_example = """
-package com.example;
-
-import java.util.List;
-import java.util.stream.Collectors;
-
-public class Bar {
-    private IDependency myDep;
-    private IAnotherDependency anotherDep = new AnotherDep();
-    private String name;
-
-    // This constructor's body should be PRESERVED because it contains
-    // the tight coupling evidence we want the LLM to find.
-    public Bar(String name) {
-        this.myDep = new ImplementationDep();
-        this.name = name;
+public class GeneratedClass34ec2475<E> implements Queue<E> {
+    JAVA("java", "java")
+    private int limit;
+    Queue<E> queue = new ConcurrentLinkedQueue<>();
+    public GeneratedClass34ec2475(int limit) {
+        this.limit = limit;
     }
-
-    // The body of this public method should be REMOVED.
-    public String processData(List<String> data) {
-        System.out.println("Processing " + data.size() + " items for " + this.name);
-        String result = data.stream()
-            .map(String::toUpperCase)
-            .filter(s -> s.startsWith("A"))
-            .collect(Collectors.joining(", "));
-        myDep.execute(result);
-        return "Done";
+    private final LFLog LOG = LFLoggerManager.getLogger(this.getClass());
+    @Override
+    public boolean offer(E e) {
+        if (queue.size() >= limit) {
+            queue.poll();
+        }
+        return queue.offer(e);
     }
-
-    // The body of this simple getter that should NOT be removed.
-    public String getName() {
-        return this.name;
+    private ScriptExecutor scriptExecutor;
+    @Override
+    public E poll() {
+        return queue.poll();
     }
-
-    // The body of this private helper method should also be REMOVED.
-    private void internalHelper() {
-        System.out.println("Internal logic...");
+    public Queue<E> getQueue() {
+        return queue;
+    }
+    @Override
+    public void loadScript(String script, String language) {
+        scriptExecutor = ScriptExecutorFactory.loadInstance().getScriptExecutor(language);
+        scriptExecutor.load(getNodeId(), script);
+    }
+    public int getLimit() {
+        return limit;
+    }
+    @Override
+    public boolean add(E e) {
+        return queue.add(e);
+    }
+    @Override
+    public E element() {
+        return queue.element();
+    }
+    @Override
+    public E peek() {
+        return queue.peek();
+    }
+    @Override
+    public boolean isEmpty() {
+        return queue.size() == 0 ? true : false;
+    }
+    @Override
+    public int size() {
+        return queue.size();
+    }
+    @Override
+    public E remove() {
+        return queue.remove();
+    }
+    @Override
+    public boolean addAll(Collection<? extends E> c) {
+        return queue.addAll(c);
+    }
+    @Override
+    public void clear() {
+        queue.clear();
+    }
+    @Override
+    public boolean isEnd() {
+        if (!ScriptTypeEnum.JAVA.getDisplayName().equals(this.getRefNode().getLanguage())) {
+            return super.isEnd();
+        }
+        ScriptExecuteWrap wrap = this.buildWrap(this);
+        return scriptExecutor.executeIsEnd(wrap);
+    }
+    @Override
+    public boolean contains(Object o) {
+        return queue.contains(o);
+    }
+    @Override
+    public boolean containsAll(Collection<?> c) {
+        return queue.containsAll(c);
+    }
+    @Override
+    public Iterator<E> iterator() {
+        return queue.iterator();
+    }
+    @Override
+    public void beforeProcess() {
+        ScriptExecuteWrap wrap = this.buildWrap(this);
+        scriptExecutor.executeBeforeProcess(wrap);
+    }
+    @Override
+    public boolean remove(Object o) {
+        return queue.remove(o);
+    }
+    @Override
+    public boolean removeAll(Collection<?> c) {
+        return queue.removeAll(c);
+    }
+    @Override
+    public boolean retainAll(Collection<?> c) {
+        return queue.retainAll(c);
+    }
+    @Override
+    public Object[] toArray() {
+        return queue.toArray();
+    }
+    @Override
+    public <T> T[] toArray(T[] a) {
+        return queue.toArray(a);
     }
 }
 """
 
     # 3. Run the skeletonization function
-    print("--- Original Code ---")
-    print(java_code_example)
-
-    skeleton_code = remove_method_bodies(java_code_example, parser, excluded_methods={"getName"})
-
-    print("\n--- Skeletonized Code ---")
-    print(skeleton_code)
+    method_names = extract_method_names_from_class(java_code_example, parser)
+    print(method_names)
