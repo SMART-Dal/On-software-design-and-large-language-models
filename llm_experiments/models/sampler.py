@@ -279,7 +279,7 @@ def prepare_cohesion_data_points(cohesion_dir: str, tokenizer: AutoTokenizer) ->
 
 if __name__ == '__main__':
     model_tag = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
-    data_path = "/home/mootez/data/On-software-design-and-large-language-models/data/prompts/cohesion"
+    data_path = ""
     task = "cohesion" # or "coupling"
     code_transformation = "gc"
     tokenizer = AutoTokenizer.from_pretrained(model_tag)
@@ -296,5 +296,5 @@ if __name__ == '__main__':
         # Displaying relevant columns for brevity
         print(final_sample.head())
 
-    # Save samples as parquet file
-    final_sample.to_pickle(f"/home/mootez/data/On-software-design-and-large-language-models/data/prompts/{task}_{code_transformation}_prompts_fixed.pkl")
+    # Save samples as pickled file
+    final_sample.to_pickle(f"{task}_{code_transformation}.pkl")

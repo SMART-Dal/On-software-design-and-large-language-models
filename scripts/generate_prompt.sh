@@ -3,7 +3,7 @@
 
 
 # Usage:
-#   ./process_yaml_files.sh <search_directory>
+#   ./generate_prompt.sh <search_directory>
 
 
 PYTHON_SCRIPT="prompt.coupling.build_coupling_prompt"

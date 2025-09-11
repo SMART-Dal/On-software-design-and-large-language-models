@@ -1,19 +1,7 @@
 #!/bin/bash
 
-#==============================================================================
-#
-# Description: This script iterates through subdirectories of an input
-#              directory. For each subdirectory, it creates a corresponding
-#              one in an output directory and then executes a Java .jar file,
-#              passing both paths as arguments.
-#
-# Usage:       ./process_folders.sh <input_directory> <output_directory>
-#
-#==============================================================================
 
-# --- CONFIGURATION ---
-# IMPORTANT: Replace "path/to/your/app.jar" with the actual path to your JAR file.
-JAR_FILE="/home/mootez/data/On-software-design-and-large-language-models/data/DesigniteJava.jar"
+JAR_FILE=$1
 
 
 # --- SCRIPT LOGIC ---
@@ -27,8 +15,8 @@ if [ "$#" -ne 2 ]; then
 fi
 
 # Assign arguments to more descriptive variables.
-INPUT_DIRECTORY=$1
-OUTPUT_DIRECTORY=$2
+INPUT_DIRECTORY=$2
+OUTPUT_DIRECTORY=$3
 
 # Check if the input directory is a valid directory.
 if [ ! -d "$INPUT_DIRECTORY" ]; then

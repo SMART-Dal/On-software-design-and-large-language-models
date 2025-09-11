@@ -3,11 +3,12 @@
 # --- Configuration ---
 # Set the paths to your main directories here.
 # IMPORTANT: Replace these placeholder paths with the actual paths on your system.
-DJ_OUTPUT_DIR=""
-RAW_PROJECTS_DIR=""
-OUTPUT_DIR=""
+JAR_FILE=$1
+DJ_OUTPUT_DIR=$2
+RAW_PROJECTS_DIR=$3
+OUTPUT_DIR=$4
 # Set the path to your Java .jar file.
-JAR_FILE=""
+
 
 # --- Script Logic ---
 
