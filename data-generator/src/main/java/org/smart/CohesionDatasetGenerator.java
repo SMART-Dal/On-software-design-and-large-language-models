@@ -5,9 +5,7 @@ import spoon.reflect.declaration.CtClass;
 import spoon.reflect.reference.CtTypeReference;
 
 import java.io.File;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class CohesionDatasetGenerator {
 
@@ -31,10 +29,11 @@ public class CohesionDatasetGenerator {
     public record OriginalClassInfo(String className, String filePath, String content) {}
 
     // Represents the result of an injection operation.
-    public record InjectionResult(CtClass<?> generatedClass, Set<String> injectedMethods) {}
+    public record InjectionResult(CtClass<?> generatedClass, Map<String, Set<String>> injectedResponsibilities) {}
 
     // Represents a single data point for the experiment dataset.
-    public record DatasetEntry(String generatedClassName, String sourceCode, String prompt, String groundTruth, String taskType, double distortionRatio, OriginalClassInfo sourceClass, OriginalClassInfo targetClass) {}
+    public record DatasetEntry(String generatedClassName, String sourceCode, String prompt, String groundTruth, String taskType, int distortionLevel, OriginalClassInfo targetClass, List<OriginalClassInfo> sourceClasses) {}
+
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -68,25 +67,24 @@ public class CohesionDatasetGenerator {
         CohesionGroundTruthGenerator groundTruthGenerator = new CohesionGroundTruthGenerator(outputDir);
 
         // Define the distortion levels to generate
-        List<Double> distortionRatios = List.of(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9);
+        List<Integer> distortionLevels = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9);
 
-        for (int i = 0; i < candidates.size(); i++) {
-            for (int j = 0; j < candidates.size(); j++) {
-                if (i == j) continue; // Don't inject a class into itself
+        for (CandidateClass targetCandidate : candidates) {
+            for (int N : distortionLevels) {
+                List<CandidateClass> potentialSources = new ArrayList<>(candidates);
+                potentialSources.remove(targetCandidate);
+                potentialSources.removeIf(source -> sharesCommonAncestor(targetCandidate.ctClass(), source.ctClass()));
 
-                CandidateClass targetCandidate = candidates.get(i);
-                CandidateClass sourceCandidate = candidates.get(j);
-
-                // More robust validity check: Ensure the two classes do not share any common ancestor.
-                if (sharesCommonAncestor(targetCandidate.ctClass(), sourceCandidate.ctClass())) {
-                    continue;
+                if (potentialSources.size() < N) {
+                    continue; // Not enough valid sources for this N
                 }
 
-                for (double ratio : distortionRatios) {
-                    InjectionResult result = injector.inject(targetCandidate.ctClass(), sourceCandidate.ctClass(), ratio);
-                    if (result != null) {
-                        groundTruthGenerator.generateAndAccumulate(result, sourceCandidate, targetCandidate, ratio);
-                    }
+                Collections.shuffle(potentialSources);
+                List<CandidateClass> selectedSources = potentialSources.subList(0, N);
+
+                InjectionResult result = injector.inject(targetCandidate.ctClass(), selectedSources);
+                if (result != null && !result.injectedResponsibilities().isEmpty()) {
+                    groundTruthGenerator.generateAndAccumulate(result, targetCandidate, selectedSources, N);
                 }
             }
         }

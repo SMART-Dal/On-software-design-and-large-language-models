@@ -16,6 +16,46 @@ public class SpoonUtils {
             "com.sun.", "javax.",  "java.", "javafx.", "jdk.", "netscape.javascript", "org.ietf.jgss", "org.w3c", "org.xml."
     );
 
+    /**
+     * Creates a simplified method signature using simple type names.
+     * This version correctly handles nested and inner classes.
+     * Example: "visit(org.example.OuterClass$InnerClass)" becomes "visit(InnerClass)".
+     *
+     * @param method The Spoon CtMethod object.
+     * @return A simplified signature string.
+     */
+    public static String getSimplifiedSignature(CtMethod<?> method) {
+        String methodName = method.getSimpleName();
+        String parameters = method.getParameters().stream()
+                .map(param -> getUltimateSimpleName(param.getType())) // Use the new helper method
+                .collect(Collectors.joining(","));
+        return String.format("%s(%s)", methodName, parameters);
+    }
+
+    /**
+     * Gets the most simplified name for a type, properly handling nested/inner classes.
+     * It extracts the name after the last dot, then after the last dollar sign.
+     *
+     * @param typeReference The Spoon CtTypeReference object.
+     * @return The ultimate simple name of the type.
+     */
+    private static String getUltimateSimpleName(CtTypeReference<?> typeReference) {
+        if (typeReference == null) {
+            return "";
+        }
+        String qualifiedName = typeReference.getQualifiedName();
+
+        // 1. Split by dot and take the last part.
+        // Using lastIndexOf is more efficient than split() for this task.
+        int lastDotIndex = qualifiedName.lastIndexOf('.');
+        String classNamePart = (lastDotIndex == -1) ? qualifiedName : qualifiedName.substring(lastDotIndex + 1);
+
+        // 2. If that part contains a dollar sign, split by it and take the last part.
+        int lastDollarIndex = classNamePart.lastIndexOf('$');
+        String simpleName = (lastDollarIndex == -1) ? classNamePart : classNamePart.substring(lastDollarIndex + 1);
+
+        return simpleName;
+    }
 
     public static String getOutputRelativePath(CtType<?> type) {
         if (type == null) {

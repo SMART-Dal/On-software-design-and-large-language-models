@@ -33,13 +33,21 @@ public class CohesionCandidateSelector {
         List<CohesionDatasetGenerator.CandidateClass> candidates = new ArrayList<>();
 
         for (CtClass<?> ctClass : classes) {
-            if (!ctClass.isClass() || isTestClass(ctClass)) continue;
+            if (!ctClass.isClass() || ctClass.isAbstract() || isTestClass(ctClass)) continue;
 
             String csvFqn = ctClass.getQualifiedName().replace('$', '.');
             if (!lcomData.containsKey(csvFqn)) continue;
 
+            // Exclude classes with a mix of static and instance methods
+            Set<CtMethod<?>> declaredMethods = CohesionAnalyzer.getDeclaredMethods(ctClass);
+            boolean hasStatic = declaredMethods.stream().anyMatch(CtMethod::isStatic);
+            boolean hasInstance = declaredMethods.stream().anyMatch(m -> !m.isStatic());
+            if (hasStatic && hasInstance) {
+                continue;
+            }
+
             Integer lcom = lcomData.get(csvFqn);
-            int numMethods = CohesionAnalyzer.getDeclaredMethods(ctClass).size();
+            int numMethods = declaredMethods.size();
 
             if (lcom != null && lcom == 0 && numMethods > 2) {
                 Map<CtElement, Set<CtElement>> adjList = cohesionAnalyzer.buildAdjacencyList(ctClass);

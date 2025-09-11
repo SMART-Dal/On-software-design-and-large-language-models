@@ -21,6 +21,8 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.smart.utils.SpoonUtils.getSimplifiedSignature;
+
 /**
  * A utility class to analyze the structural cohesion of a Java class.
  */
@@ -80,7 +82,7 @@ class CohesionAnalyzer {
         return components.stream()
                 .map(component -> component.stream()
                         .filter(CtMethod.class::isInstance)
-                        .map(el -> ((CtMethod<?>) el).getSimpleName())
+                        .map(el -> getSimplifiedSignature((CtMethod<?>) el))  // Use full signature
                         .collect(Collectors.toSet()))
                 .filter(methodSet -> !methodSet.isEmpty())
                 .collect(Collectors.toList());
@@ -88,7 +90,7 @@ class CohesionAnalyzer {
 
     public static Set<CtMethod<?>> getDeclaredMethods(CtClass<?> ctClass) {
         return ctClass.getMethods().stream()
-                .filter(m -> m.getDeclaringType().getQualifiedName().equals(ctClass.getQualifiedName()))
+                .filter(m -> m.getDeclaringType().getQualifiedName().equals(ctClass.getQualifiedName()) && !m.isAbstract() )
                 .collect(Collectors.toSet());
     }
 }
