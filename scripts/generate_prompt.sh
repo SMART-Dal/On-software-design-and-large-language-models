@@ -6,8 +6,7 @@
 #   ./process_yaml_files.sh <search_directory>
 
 
-
-PYTHON_SCRIPT="prompt.build_prompt"
+PYTHON_SCRIPT="prompt.coupling.build_coupling_prompt"
 SEARCH_DIR=$1
 
 # --- Main Logic ---
@@ -23,7 +22,7 @@ find "$SEARCH_DIR" -maxdepth 1 -type f \( -name "*.yml" -o -name "*.yaml" \) -pr
         echo "----------------------------------------"
         echo "Processing file: $yaml_file"
 
-        python3 -m "$PYTHON_SCRIPT" --config_file="$yaml_file"
+        python3 -m "$PYTHON_SCRIPT" --config_file="$yaml_file" --with_iqr --rm_bodies
 
         echo "Finished processing $yaml_file"
         echo "----------------------------------------"

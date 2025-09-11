@@ -32,6 +32,11 @@ check_mutation_output() {
             [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_directinstantiation" 2>/dev/null)" ] && \
             [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_did.json" ] && return 0
             ;;
+        factorymethodobfuscator)
+            [ -d "$OUTPUT_DIR/${project_name}-transformed_factorymethodobfuscator" ] && \
+            [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_factorymethodobfuscator" 2>/dev/null)" ] && \
+            [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_fmo.json" ] && return 0
+            ;;
         unusedinjecteddependency)
             [ -d "$OUTPUT_DIR/${project_name}-transformed_unusedinjecteddependency" ] && \
             [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_unusedinjecteddependency" 2>/dev/null)" ] && \
@@ -69,11 +74,11 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 # Define the list of mutations
-mutations=('dependencygraph' 'instantiationremover' 'directinstantiation' 'unusedinjecteddependency')
+mutations=('factorymethodobfuscator')
 
 # Prepare log files
-SUCCESS_LOG="successful_mutations.txt"
-FAIL_LOG="failed_mutations.txt"
+SUCCESS_LOG="successful_mutations_fmo.txt"
+FAIL_LOG="failed_mutations_fmo.txt"
 > "$SUCCESS_LOG"
 > "$FAIL_LOG"
 echo "Log files '$SUCCESS_LOG' and '$FAIL_LOG' have been reset."
@@ -124,6 +129,13 @@ for subdir in "$INPUT_DIR"/*/; do
                 if [ -d "$OUTPUT_DIR/${project_name}-transformed_directinstantiation" ] && \
                    [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_directinstantiation")" ] && \
                    [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_did.json" ]; then
+                    mutation_successful=true
+                fi
+                ;;
+            factorymethodobfuscator)
+                if [ -d "$OUTPUT_DIR/${project_name}-transformed_factorymethodobfuscator" ] && \
+                   [ -n "$(ls -A "$OUTPUT_DIR/${project_name}-transformed_factorymethodobfuscator")" ] && \
+                   [ -f "$OUTPUT_DIR/${project_name}_mutated_classes_fmo.json" ]; then
                     mutation_successful=true
                 fi
                 ;;
