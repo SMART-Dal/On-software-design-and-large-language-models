@@ -2,6 +2,15 @@
 
 ![Methodology Overview](./figures/overview.png)
 
+## TLDR;
+- Large Language Models (LLMs) have a solid baseline understanding of software design concepts like cohesion and coupling in ideal, simple scenarios.
+- However, this knowledge is fragile and not practical for real-world use; the models act more like "efficient interns" who need guidance rather than autonomous "senior engineers".
+- Reasoning about coupling is brittle and collapses when the code context is noisy, with F1 scores dropping by over 50%.
+- Reasoning about cohesion is more robust to noise in guided tasks but fails when the model must work autonomously without any hints.
+- When analyzing complex coupling problems, LLMs take "cognitive shortcuts" and don't analyze all the code. For cohesion, they attempt a more exhaustive analysis but still fail.
+- Ultimately, LLMs can be reliable assistants for recognizing design flaws with guidance, but their ability to reason autonomously in noisy, realistic contexts is limited.
+
+## Asbtract
 
 > Large language models (LLMs) are being increasingly adopted in the software engineering domain, yet the robustness of their grasp on core software design concepts remains unclear. We conduct an empirical study to systematically evaluate their understanding of cohesion (intra-module) and coupling (inter-module). We programmatically generate poorly designed code fragments and test the DeepSeek-R1 model family (14B, 32B, 70B) under varying levels of guidance, from simple _Verification_ to _Guided_ and _Open-ended Generation_, while varying contextual noise by injecting distractor elements. While models exhibit a solid baseline understanding of both concepts in ideal conditions, their practical knowledge is fragile and highly asymmetrical. Reasoning about coupling proves brittle; performance collapses in noisy, open-ended scenarios, with F1 scores dropping by over 50%. In contrast, the models' analysis of cohesion is remarkably robust to internal noise in guided tasks, showing little performance degradation. However, this resilience also fails when all guidance is removed. Reasoning-trace analysis confirms these failure modes, revealing _cognitive shortcutting_ for coupling versus a more exhaustive (yet still failing) analysis for cohesion. To summarize, while LLMs can provide reliable assistance for recognizing design flaws, their ability to reason autonomously in noisy, realistic contexts is limited, highlighting the critical need for more scalable and robust program understanding capabilities.
 
