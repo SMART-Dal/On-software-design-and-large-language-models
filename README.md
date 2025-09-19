@@ -116,3 +116,38 @@ python3 -m models.parallel_inference \
 ## Compile Results
 
 The scripts used to calculate the performance metrics for the coupling and cohesion experiments are `llm_experiments/evaluation/coupling_main.py` and `llm_experiments/evaluation/cohesion_main.py`, respectively. In each file the variable `ROOT_RESULTS_FOLDER` must be set to the folder where the results of inference are stored. The `mutation` variable contains the code transformation name.
+
+## Main Results:
+
+### RQ1: Basic Understanding of Cohesion and Coupling
+![rq1_table](./figures/rq1_table.png)
+
+### RQ2: Impact of Cognitive Load on Model Performance
+![Impact of the cognitive load on the performance of each model in coupling analysis.](./figures/rq2_coupling_results-1.png)
+*Impact of the cognitive load on the performance of each model in coupling analysis.*
+
+![Impact of the cognitive load on the performance of each model in cohesion analysis.](./figures/rq2_cohesion_results-1.png)
+*Impact of the cognitive load on the performance of each model in cohesion analysis.*
+
+### RQ3: Robustness Against Distortion
+![Performance of DeepSeek-R1 14B, 32B and 70B on the coupling task under each distortion ratio. Results are aggregated across all code transformations. The average F1 score refers to the mean across models and distortion levels.](./figures/coupling_plots-1.png)
+*Performance of DeepSeek-R1 14B, 32B and 70B on the coupling task under each distortion ratio. Results are aggregated across all code transformations. The average F1 score refers to the mean across models and distortion levels.*
+
+![Performance of DeepSeek-R1 14B, 32B and 70B on the cohesion task under each distortion level.](./figures/cohesion_plots-1.png)
+*Performance of DeepSeek-R1 14B, 32B and 70B on the coupling task under each distortion ratio. Results are aggregated across all code transformations. The average F1 score refers to the mean across models and distortion levels.*
+### RQ4: Trends in Reasoning Traces
+
+![Relationship between the distortion ratio and the token count of reasoning traces across all models on the coupling task. We use the did code transformation results, given that the coupling code transformations do not impact the models’ performance.](./figures/rq5_coupling_cot_len_dr_small-1.png)
+*Relationship between the distortion ratio and the token count of reasoning traces across all models on the coupling task. We use the DID code transformation results, given that the coupling code transformations do not impact the models’ performance.*
+
+![Relationship between the distortion ratio and the percentage of analyzed classes in the reasoning traces in the coupling experiment.](./figures/rq5_coupling_covered_classes_dr_small-1.png)
+*Relationship between the distortion ratio and the percentage of analyzed classes in the reasoning traces in the coupling experiment.*
+
+![Relationship between the distortion levels and the length of reasoning traces across all models on the cohesion task.](./figures/rq5_cohesion_cot_len_dr_small-1.png)
+*Relationship between the distortion levels and the length of reasoning traces across all models on the cohesion task.*
+
+![The impact of increasing distortion levels on the percentage of method coverage in Chain-of-Thought reasoning traces.](./figures/rq5_cohesion_method_coverage-1.png)
+*The impact of increasing distortion levels on the percentage of method coverage in Chain-of-Thought reasoning traces.*
+
+![Model size vs. reasoning length. Smaller models tend to generate longer CoT traces.](./figures/rq5_model_size-1.png)
+*Model size vs. reasoning length. Smaller models tend to generate longer CoT traces.*
