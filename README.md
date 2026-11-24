@@ -1,4 +1,4 @@
-# _Efficient Interns or Senior Engineers?_ An Empirical Study of LLMs’ Software Design Capabilities
+# _Efficient Interns or Senior Engineers?_ On LLMs’ Grasp of Cohesion and Coupling
 
 ![Methodology Overview](./figures/overview.png)
 
